@@ -187,12 +187,12 @@ export function createExpressApi(store: StudioStore, app = express(), sharedSign
   });
   api.post('/accounts', async (req, res) => {
     if (!store.createManagedAccount) throw new ApiError(503, 'Account management is unavailable.');
-    const account = managedAccount.parse(req.body);
-    if (account.username === ownerUsername || !await store.createManagedAccount(randomUUID(), account)) {
+    const { username, name, pin, role } = managedAccount.parse(req.body);
+    if (!username) throw new ApiError(422, 'Enter a username.');
+    if (username === ownerUsername || !await store.createManagedAccount(randomUUID(), { username, name, pin, role })) {
       throw new ApiError(409, 'Username is already in use.');
     }
-    const { pin: _pin, ...publicAccount } = account;
-    res.status(201).json(publicAccount);
+    res.status(201).json({ username, name, role });
   });
   api.get('/studio', async (_req, res) => {
     const { data, revision } = await load(res);
