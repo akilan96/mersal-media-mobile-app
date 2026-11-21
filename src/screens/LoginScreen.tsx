@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { apiRequest } from '../services/cloudApi';
-import { Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image, Keyboard, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
 import { Brand, Button, Card, ErrorMessage, Field, Screen } from '../components/ui';
 import { useStudio } from '../state/StudioProvider';
@@ -11,11 +11,12 @@ type PinFieldProps = {
   value: string;
   onChange: (value: string) => void;
   revealed: boolean;
+  largeLabel?: boolean;
   disabled?: boolean;
   error?: string;
 };
 
-function PinField({ label, value, onChange, revealed, disabled, error }: PinFieldProps) {
+function PinField({ label, value, onChange, revealed, disabled, error, largeLabel }: PinFieldProps) {
   const { colors, ui } = useStudioTheme();
   const styles = makeStyles(colors);
  
@@ -24,7 +25,7 @@ function PinField({ label, value, onChange, revealed, disabled, error }: PinFiel
 
   return (
     <View style={styles.fieldGroup}>
-      <Text style={ui.label}>{label}</Text>
+      <Text style={[ui.label, largeLabel && styles.cloudLabel]}>{label}</Text>
       <Pressable onPress={() => inputRef.current?.focus()} accessible={false}>
         <View style={styles.pinRow} pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
           {[0, 1, 2, 3].map((index) => (
@@ -172,16 +173,12 @@ export function LoginScreen() {
 }
 
 function CloudLoginScreen() {
-  const { unlock, setup, busy } = useStudio();
-  const { colors, ui } = useStudioTheme();
+  const { unlock, busy } = useStudio();
+  const { colors } = useStudioTheme();
   const styles = makeStyles(colors);
-  const [register, setRegister] = useState(false);
   const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [pinMode, setPinMode] = useState(false);
-  const [joinCode, setJoinCode] = useState('');
-  const [name, setName] = useState('');
-  const [studioName, setStudioName] = useState('');
+  const [secret, setSecret] = useState('');
+  const [pinMode, setPinMode] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -198,51 +195,48 @@ function CloudLoginScreen() {
       setError('Enter a studio username with 3–40 letters, numbers, dots, dashes or underscores.');
       return;
     }
-    if (pinMode ? !/^\d{4}$/.test(password) : password.length < 12 || password.length > 128) {
+    if (pinMode ? !/^\d{4}$/.test(secret) : secret.length < 12 || secret.length > 128) {
       setError(pinMode ? 'Enter your four-digit PIN.' : 'Enter a studio password with 12–128 characters.');
       return;
     }
-    if (register && (!name.trim() || !studioName.trim())) {
-      setError('Enter your name and your studio name.');
-      return;
-    }
 
-    if (register && !joinCode.trim()) {
-      setError('Enter the join code from your studio.');
-      return;
-    }
-
-    try {
-      if (register) await setup({ username: username.trim(), name: name.trim(), studioName: studioName.trim(), phone: '', email: '' }, password, joinCode.trim());
-      else await unlock(username.trim(), password);
-    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not sign in.'); }
+    Keyboard.dismiss();
+    try { await unlock(username.trim(), secret); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not sign in.'); }
   }
 
   return (
-    <Screen contentStyle={styles.content}>
-      <Image source={require('../../assets/design/login-hero.png')} resizeMode="contain" style={styles.hero} />
-      <View style={styles.brand}><Brand /></View>
-      <Text accessibilityRole="header" style={styles.headline}>{register ? 'Join Your Studio' : 'Sign In to Your Studio'}</Text>
-      <View style={styles.form}>
-        {register && <>
-          <Field label="Your name" value={name} onChangeText={setName} maxLength={100} editable={!busy} />
-          <Field label="Studio name" value={studioName} onChangeText={setStudioName} maxLength={100} editable={!busy} />
-          <Field label="Studio join code" value={joinCode} onChangeText={setJoinCode} secureTextEntry autoCapitalize="none" autoCorrect={false} maxLength={256} editable={!busy} />
-        </>}
-        <Field label="Studio username" value={username} onChangeText={setUsername} autoCapitalize="none" autoCorrect={false} autoComplete="username" maxLength={40} editable={!busy} />
-        {pinMode ? <PinField label="4-digit studio PIN" value={password} onChange={setPassword} revealed={false} disabled={busy} />
-          : <Field label="Studio password" value={password} onChangeText={setPassword} secureTextEntry autoCapitalize="none" autoCorrect={false} autoComplete={register ? 'new-password' : 'current-password'} maxLength={128} editable={!busy} />}
-        {error ? <ErrorMessage message={error} /> : null}
-        <Button title={register ? 'Join Studio' : 'Sign In'} onPress={submit} icon="arrow-right" loading={busy} disabled={busy} />
-        <Pressable accessibilityRole="button" disabled={busy} onPress={() => { setRegister(!register); setError(''); setPassword(''); setJoinCode(''); }}>
-          <Text style={[ui.label, styles.centered]}>{register ? 'Already have an account? Sign in' : 'Join a studio'}</Text>
-        </Pressable>
+    <Screen contentStyle={styles.cloudContent}>
+      <View style={styles.cloudPanel}>
+        <View style={styles.cloudHeading}>
+          <Brand />
+          <Text accessibilityRole="header" style={[styles.headline, styles.cloudHeadline]}>Sign In to Your Studio</Text>
+        </View>
+        <View style={styles.cloudForm}>
+          <Field label="Studio username" labelStyle={styles.cloudLabel} style={styles.cloudInput} icon="user"
+            value={username} onChangeText={setUsername} autoCapitalize="none" autoCorrect={false} autoComplete="username" maxLength={40} editable={!busy} />
+          {pinMode ? <PinField label="4-digit studio PIN" largeLabel value={secret} onChange={setSecret} revealed={false} disabled={busy} />
+            : <Field label="Studio password" labelStyle={styles.cloudLabel} style={styles.cloudInput} icon="lock" value={secret}
+              onChangeText={setSecret} secureTextEntry autoCapitalize="none" autoCorrect={false} autoComplete="current-password" maxLength={128} editable={!busy} />}
+          {error ? <ErrorMessage message={error} /> : null}
+          <Button title="Sign In" onPress={submit} icon="arrow-right" loading={busy} disabled={busy} textStyle={styles.cloudButtonText} />
+        </View>
+        <Image source={require('../../assets/design/sign-in-camera.jpg')} resizeMode="cover" style={styles.cloudHero} accessible={false} />
       </View>
     </Screen>
   );
 }
 const makeStyles = (colors: Palette) => StyleSheet.create({
   content: { gap: 22, paddingTop: 12, paddingBottom: 32 },
+  cloudContent: { paddingTop: 20 },
+  cloudPanel: { width: '100%', maxWidth: 420, alignSelf: 'center', gap: 16 },
+  cloudHero: { width: '68%', maxWidth: 248, aspectRatio: 3.3, alignSelf: 'center', borderRadius: 12 },
+  cloudHeading: { alignItems: 'center', gap: 10 },
+  cloudHeadline: { fontSize: 29, lineHeight: 35 },
+  cloudForm: { gap: 14, padding: 14, borderRadius: 20, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card },
+  cloudLabel: { fontSize: 16, lineHeight: 22 },
+  cloudInput: { fontSize: 17 },
+  cloudButtonText: { fontSize: 17 },
   hero: { width: '100%', height: 180 },
   brand: { alignItems: 'center' },
   introduction: { gap: 8, alignItems: 'center' },

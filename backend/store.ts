@@ -1,4 +1,4 @@
-import type { StudioData } from '../src/domain/types';
+import type { ManagedAccount, StudioData } from '../src/domain/types';
 
 export type StudioCredential = { pin: string } | { salt: string; passwordHash: string };
 
@@ -29,6 +29,9 @@ export interface StudioStore {
   findCredentials(username: string): Result<({ id: string } & StudioCredential) | null>;
   createSession(session: SessionRecord): Result<void>;
   findSession(hash: string, now: number): Result<string | null>;
+  findAccountSession?(hash: string, now: number): Result<{ username: string; role: ManagedAccount['role'] } | null>;
+  listManagedAccounts?(): Result<ManagedAccount[]>;
+  createManagedAccount?(id: string, account: ManagedAccount & { pin: string }): Result<boolean>;
   revokeSession(hash: string): Result<void>;
   load(studioId: string): Result<{ data: StudioData; revision: number } | null>;
   save(studioId: string, revision: number, data: StudioData, previous: StudioData): Result<boolean>;

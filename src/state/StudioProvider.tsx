@@ -2,25 +2,30 @@ import React, { createContext, useCallback, useContext, useEffect, useRef, useSt
 import { defaultEventTypes, type ThemeName } from '../domain/types';
 import { AppState } from 'react-native';
 import * as Crypto from 'expo-crypto';
-import type { ClientInput, EventInput, Profile, StudioData } from '../domain/types';
-import { isClientPhone, phoneDigits, putEvent, removeClient, validateClient, validateProfile } from '../domain/validation';
+import type { AccountRole, ClientInput, EventInput, EventStatus, ManagedAccount, Profile, StudioData, StudioEvent } from '../domain/types';
+import { addPhotoGallery, isClientPhone, phoneDigits, putEvent, removeClient, validateClient, validateProfile } from '../domain/validation';
 import { emptyStudio, studioRepository } from '../services/repository';
 import { createCredential, hasCredential, removeCredential, verifyPin } from '../services/credentials';
 import { cloudApiUrl } from '../services/cloudApi';
 import { useCloudStudio } from './useCloudStudio';
 export interface StudioContext {
   cloud: boolean;
+  role?: AccountRole;
+  listAccounts?(): Promise<ManagedAccount[]>;
+  createAccount?(account: ManagedAccount & { pin: string }): Promise<ManagedAccount>;
   data: StudioData; configured: boolean; authenticated: boolean; loading: boolean; storageError: string | null;
   authError: string | null; busy: boolean; retryLoad(): void;
   setup(profile: Profile, pin: string, joinCode?: string): Promise<void>; unlock(username: string, pin: string): Promise<void>;
   lock(): void; changePin(currentPin: string, newPin: string): Promise<void>;
   saveEvent(input: EventInput, id?: string, contact?: { name: string; phone: string }): Promise<string>; deleteEvent(id: string): Promise<void>;
-  recordPayment(eventId: string, amount: number, note: string): Promise<void>;
+  recordPayment(eventId: string, amount: number, note: string): Promise<StudioEvent>;
+  setEventStatus(eventId: string, status: EventStatus): Promise<void>;
   saveClient(input: ClientInput, id?: string): Promise<string>; deleteClient(id: string): Promise<void>;
   saveProfile(profile: Profile): Promise<void>;
   setTheme(theme: ThemeName): Promise<void>;
   setHomePhoto(uri?: string): Promise<void>;
   addEventType(name: string): Promise<void>;
+  savePhotoGallery(clientId: string, driveLink: string): Promise<void>;
 }
 const Context = createContext<StudioContext | null>(null);
 function LocalStudioProvider({ children }: { children: React.ReactNode }) {
@@ -95,6 +100,10 @@ function LocalStudioProvider({ children }: { children: React.ReactNode }) {
     },
     async setTheme(theme) { await commit(previous => ({ ...previous, theme })); },
     async setHomePhoto(homePhoto) { await commit(previous => ({ ...previous, homePhoto })); },
+    async savePhotoGallery(clientId, driveLink) {
+      const gallery = { id: Crypto.randomUUID(), clientId, driveLink: driveLink.trim(), createdAt: new Date().toISOString() };
+      await commit(previous => addPhotoGallery(previous, gallery));
+    },
     async addEventType(name) {
       const clean = name.trim();
       if (!clean || clean.length > 60) throw new Error('Enter an event type up to 60 characters.');
@@ -132,10 +141,21 @@ function LocalStudioProvider({ children }: { children: React.ReactNode }) {
     },
     async recordPayment(eventId, amount, note) {
       const payment = { id: Crypto.randomUUID(), date: new Date().toISOString(), amount, note };
+      let saved: StudioEvent | undefined;
       await commit(previous => {
         const event = previous.events.find(item => item.id === eventId);
         if (!event) throw new Error('This event no longer exists.');
-        return putEvent(previous, { ...event, payments: [...event.payments, payment] }, event.id, event.createdAt);
+        saved = { ...event, payments: [...event.payments, payment] };
+        return putEvent(previous, saved, event.id, event.createdAt);
+      });
+      if (!saved) throw new Error('The saved payment could not be loaded.');
+      return saved;
+    },
+    async setEventStatus(eventId, status) {
+      await commit(previous => {
+        const event = previous.events.find(item => item.id === eventId);
+        if (!event) throw new Error('This event no longer exists.');
+        return putEvent(previous, { ...event, status }, event.id, event.createdAt);
       });
     },
     async deleteEvent(id) { await commit(previous => ({ ...previous, events: previous.events.filter(e => e.id !== id) })); },

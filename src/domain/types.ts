@@ -1,5 +1,7 @@
 import { daisyThemes } from '../daisyThemes';
 export type EventStatus = 'Scheduled' | 'Editing' | 'Completed' | 'Cancelled';
+export type AccountRole = 'owner' | 'admin' | 'client';
+export type ManagedAccount = { username: string; name: string; role: Exclude<AccountRole, 'owner'> };
 export type EventType = string;
 export const defaultEventTypes = ['Marriage', 'Reception', 'Birthday Party', 'Corporate Event', 'Baby Shower', 'Portraits', 'Other'];
 export type ThemeName = keyof typeof daisyThemes | 'pancake';
@@ -12,12 +14,14 @@ export interface StudioEvent {
 }
 export interface Client { id: string; name: string; phone: string; email: string; notes: string; createdAt: string }
 export interface Profile { name: string; studioName: string; username: string; phone: string; email: string }
-export interface StudioData { version: 1; profile: Profile | null; events: StudioEvent[]; clients: Client[]; theme?: ThemeName; homePhoto?: string; customEventTypes?: string[] }
+export interface PhotoGallery { id: string; clientId: string; driveLink: string; createdAt: string }
+export interface StudioData { version: 1; profile: Profile | null; events: StudioEvent[]; clients: Client[]; theme?: ThemeName; homePhoto?: string; customEventTypes?: string[]; photoGalleries?: PhotoGallery[] }
 export type EventInput = Omit<StudioEvent, 'id' | 'createdAt'>;
 export type ClientInput = Omit<Client, 'id' | 'createdAt'>;
 export type EventListFilter = 'all' | 'total' | 'upcoming' | 'completed' | 'editing';
 export type MainTabParamList = { Home: undefined; Events: { filter: EventListFilter; openedAt?: number } | undefined; Photos: undefined; Clients: undefined; Settings: undefined };
 export type RootStackParamList = {
+  Accounts: undefined;
   Payments: undefined;
   Welcome: undefined; Login: undefined; Main: undefined;
   CreateEvent: { eventId?: string } | undefined; EventDetails: { eventId: string };

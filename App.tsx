@@ -1,4 +1,5 @@
 import { useFonts } from 'expo-font';
+import { Image } from 'expo-image';
 import { Inter_400Regular } from '@expo-google-fonts/inter/400Regular';
 import { Inter_500Medium } from '@expo-google-fonts/inter/500Medium';
 import { Inter_600SemiBold } from '@expo-google-fonts/inter/600SemiBold';
@@ -7,7 +8,7 @@ import { Inter_800ExtraBold } from '@expo-google-fonts/inter/800ExtraBold';
 import { ToastProvider } from './src/components/Toast';
 import { daisyThemes } from './src/daisyThemes';
 import React from 'react';
-import { ActivityIndicator, Text, View } from 'react-native';
+import { ActivityIndicator, Modal, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { AppNavigator } from './src/navigation/AppNavigator';
@@ -28,10 +29,17 @@ function ThemedStudio() {
 function StudioApp() {
   useEventReminders();
   const { colors, ui } = useStudioTheme();
-  const { cloud, loading, storageError, retryLoad } = useStudio();
+  const { cloud, loading, storageError, retryLoad, busy, authenticated } = useStudio();
   if (loading) return <Screen scroll={false} contentStyle={{ justifyContent: 'center', alignItems: 'center', gap: 24 }}><Brand /><ActivityIndicator size="large" color={colors.primary} /><Text style={ui.body}>Opening your studio…</Text></Screen>;
   if (storageError) return <Screen><Brand /><Card><Text style={ui.heading}>{cloud ? 'Could not load your studio' : 'Local storage needs attention'}</Text><Text style={[ui.body, { marginTop: 10 }]}>Your saved records have been preserved. Try opening the studio again.</Text></Card><ErrorMessage message={storageError} /><Button title="Retry" onPress={retryLoad} /></Screen>;
-  return <AppNavigator />;
+  return <>
+    <AppNavigator />
+    {cloud && busy && !authenticated && (
+      <Modal animationType="none" statusBarTranslucent onRequestClose={() => {}}>
+        <SignInSplash />
+      </Modal>
+    )}
+  </>;
 }
 const studioFonts = {
   InterRegular: Inter_400Regular,
@@ -40,6 +48,23 @@ const studioFonts = {
   InterBold: Inter_700Bold,
   InterExtraBold: Inter_800ExtraBold,
 };
+
+function SignInSplash() {
+  return <View style={splashStyles.screen}>
+    <StatusBar style="light" />
+    <Image
+      source={require('./assets/design/splash-animation.gif')}
+      style={splashStyles.animation}
+      contentFit="contain"
+      accessibilityLabel="Mersal Media loading"
+    />
+  </View>;
+}
+
+const splashStyles = StyleSheet.create({
+  screen: { flex: 1, justifyContent: 'center', backgroundColor: '#0F0E0E' },
+  animation: { width: '100%', aspectRatio: 16 / 9 },
+});
 
 export default function App() {
   const [loaded, fontError] = useFonts(studioFonts);

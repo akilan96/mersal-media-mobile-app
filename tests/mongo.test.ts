@@ -38,9 +38,13 @@ test('Atlas models preserve nested records and declare required indexes', async 
     assert.equal(snapshot.events[0].payments[0].amount, 500);
     assert.equal(snapshot.events[0].date, date);
     assert.ok(!Object.hasOwn(snapshot.events[0], '_id'));
-    const { settings, ...records } = splitStudioData(snapshot as Parameters<typeof splitStudioData>[0]);
+    const withGallery = {
+      ...snapshot as Parameters<typeof splitStudioData>[0],
+      photoGalleries: [{ id: randomUUID(), clientId, driveLink: 'https://drive.google.com/drive/folders/example', createdAt: date }],
+    };
+    const { settings, ...records } = splitStudioData(withGallery);
     const restored = joinStudioData({ _id: 'shared', revision: 0, ...settings, ...records });
-    assert.deepEqual(JSON.parse(JSON.stringify(restored)), JSON.parse(JSON.stringify(snapshot)));
+    assert.deepEqual(JSON.parse(JSON.stringify(restored)), JSON.parse(JSON.stringify(withGallery)));
     assert.ok(!Object.hasOwn(records.events[0], 'payments'));
     assert.equal(records.payments[0].eventId, records.events[0]._id);
     assert.equal(records.events[0].clientId, records.clients[0]._id);

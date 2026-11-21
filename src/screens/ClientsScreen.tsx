@@ -162,38 +162,46 @@ export default function ClientsScreen() {
     empty={<EmptyState icon="users" title={data.clients.length ? 'No matching clients' : 'A little space for your people'} description={data.clients.length ? 'Try another search.' : 'Add your first client, then connect their upcoming shoots.'} action={query.trim() ? <Button title="Clear search" icon="x" onPress={() => setQuery('')} /> : undefined} />}
     renderItem={({ item: { client, events, event } }) => {
             const tone = event?.status === 'Completed' ? 'success' : event?.status === 'Editing' ? 'warning' : event?.status === 'Cancelled' ? 'error' : 'teal';
+            const initials = client.name.trim().split(/\s+/).slice(0, 2).map(word => Array.from(word)[0]).join('').toUpperCase();
             return <Card key={client.id} style={styles.clientCard}>
-              <View style={styles.cardHeader}>
-                <View style={styles.cardDetails}>
-                  <View style={styles.nameRow}>
-                    <Pressable accessibilityRole="button" accessibilityLabel={`Edit ${client.name}`} onPress={() => openForm(client)} style={ui.flex}>
-                      <Text style={styles.clientName}>{client.name}</Text>
-                    </Pressable>
-                    <Badge label={event?.status ?? 'New client'} tone={tone} />
-                  </View>
-                  <Text style={styles.eventTitle} numberOfLines={2}>{event?.title || 'No shoots linked yet'}</Text>
-                  {event && <Pressable onPress={() => navigation.navigate('EventDetails', { eventId: event.id })} accessibilityRole="button"
-                    accessibilityLabel={`View ${event.title}`} style={styles.eventMeta}>
-                    <View style={styles.metaItem}><Feather name="calendar" size={13} color={colors.text} /><Text style={ui.small}>{formatDate(event.date)}</Text></View>
-                    <View style={[styles.metaItem, ui.flex]}><Feather name="map-pin" size={13} color={colors.text} /><Text style={[ui.small, ui.flex]} numberOfLines={1}>{event.location}</Text></View>
-                  </Pressable>}
-                  {(client.phone || client.email) ? <View style={styles.metaItem}>
-                    <Feather name={client.phone ? 'phone' : 'mail'} size={13} color={colors.text} />
-                    <Text numberOfLines={1} style={[ui.small, ui.flex]}>{client.phone || client.email}</Text>
-                  </View> : null}
+              <View style={styles.cardBody}>
+                <View style={styles.cardHeader}>
+                  <View style={styles.avatar} accessible={false}><Text style={styles.initials}>{initials}</Text></View>
+                  <Pressable accessibilityRole="button" accessibilityLabel={`Edit ${client.name}`} onPress={() => openForm(client)} style={styles.nameBlock}>
+                    <Text style={styles.clientName}>{client.name}</Text>
+                    {(client.phone || client.email) ? <View style={styles.metaItem}>
+                      <Feather name={client.phone ? 'phone' : 'mail'} size={13} color={colors.muted} />
+                      <Text numberOfLines={1} style={[ui.small, ui.flex]}>{client.phone || client.email}</Text>
+                    </View> : null}
+                  </Pressable>
                 </View>
+                {event ? (
+                  <Pressable onPress={() => navigation.navigate('EventDetails', { eventId: event.id })} accessibilityRole="button"
+                    accessibilityLabel={`View ${event.title}`} style={({ pressed }) => [styles.eventLink, pressed && { opacity: 0.72 }]}>
+                    <View style={styles.eventBody}>
+                      <Text style={styles.eventTitle} numberOfLines={2}>{event.title}</Text>
+                      <View style={styles.eventMeta}>
+                        <View style={styles.metaItem}><Feather name="calendar" size={13} color={colors.muted} /><Text style={ui.small}>{formatDate(event.date)}</Text></View>
+                        <View style={[styles.metaItem, styles.venueItem]}><Feather name="map-pin" size={13} color={colors.muted} /><Text style={[ui.small, styles.venue]} numberOfLines={1}>{event.location}</Text></View>
+                      </View>
+                      <View style={styles.eventStatus}><Badge label={event.status} tone={tone} /></View>
+                    </View>
+                    <Feather name="chevron-right" size={18} color={colors.primaryDark} />
+                  </Pressable>
+                ) : <Text style={ui.small}>No shoots linked yet</Text>}
               </View>
               <View style={styles.actions}>
                 <View style={[styles.metaItem, ui.flex]}>
                   <Feather name="layers" size={15} color={colors.text} />
                   <Text style={[ui.small, ui.flex]}>{events.length} linked {events.length === 1 ? 'shoot' : 'shoots'}</Text>
                 </View>
-                {client.phone ? <>
+                <View style={styles.actionGroup}>{client.phone ? <>
                   <ClientAction icon="phone" label={`Call ${client.name}`} color={colors.success} onPress={() => { void openContact(`tel:${client.phone.replace(/[^+\d]/g, '')}`); }} />
                   <ClientAction icon="message-circle" label={`Message ${client.name}`} color={colors.success} onPress={() => message(client)} />
                 </> : null}
                 <ClientAction icon="edit-2" label={`Edit ${client.name}`} color={colors.primaryDark} onPress={() => openForm(client)} />
                 <ClientAction icon="trash-2" label={`Delete ${client.name}`} color={colors.error} disabled={Boolean(deletingId)} onPress={() => confirmDelete(client, events.length)} />
+                </View>
               </View>
             </Card>;
     }}
@@ -235,16 +243,24 @@ function ClientAction({ icon, label, color, disabled, onPress }: {
 
 const makeStyles = (colors: Palette) => StyleSheet.create({
   sortRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },
-  clientCard: { overflow: 'hidden', borderRadius: 16, padding: 0 },
-  cardHeader: { flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: 11, paddingVertical: 8, gap: 8 },
-  cardDetails: { flex: 1, minWidth: 0, gap: 2 },
-  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  actionTarget: { width: 40, height: 44, alignItems: 'center', justifyContent: 'center' },
-  clientName: { color: colors.text, fontSize: 16, fontFamily: 'InterExtraBold', lineHeight: 22 },
-  eventTitle: { color: colors.primary, fontSize: 12, fontFamily: 'InterSemiBold', lineHeight: 17 },
-  eventMeta: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 28 },
+  clientCard: { overflow: 'hidden', borderRadius: 18, padding: 0 },
+  cardBody: { padding: 13, gap: 10 },
+  cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 11 },
+  avatar: { width: 42, height: 42, borderRadius: 13, backgroundColor: colors.mint, alignItems: 'center', justifyContent: 'center' },
+  initials: { color: colors.primaryDark, fontSize: 15, fontFamily: 'InterExtraBold' },
+  nameBlock: { flex: 1, minWidth: 0, minHeight: 44, justifyContent: 'center', gap: 2 },
+  actionTarget: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  clientName: { color: colors.text, fontSize: 17, fontFamily: 'InterExtraBold', lineHeight: 23 },
+  eventLink: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 9, borderWidth: 1, borderColor: colors.border, borderRadius: 12 },
+  eventBody: { flex: 1, minWidth: 0, gap: 5 },
+  eventTitle: { color: colors.primaryDark, fontSize: 14, fontFamily: 'InterSemiBold', lineHeight: 19 },
+  eventMeta: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', columnGap: 9, rowGap: 3 },
+  venueItem: { maxWidth: '100%', minWidth: 0 },
+  venue: { flexShrink: 1 },
+  eventStatus: { alignSelf: 'flex-start' },
   metaItem: { flexDirection: 'row', gap: 5, alignItems: 'center' },
-  actions: { flexDirection: 'row', alignItems: 'center', borderTopWidth: 1, borderTopColor: colors.border, paddingHorizontal: 10, gap: 2 },
+  actions: { flexDirection: 'row', alignItems: 'center', borderTopWidth: 1, borderTopColor: colors.border, paddingHorizontal: 12, gap: 4 },
+  actionGroup: { flexDirection: 'row', alignItems: 'center' },
   modal: { flex: 1, backgroundColor: colors.background },
   modalContent: { padding: 20, gap: 20, paddingBottom: 40 },
 });

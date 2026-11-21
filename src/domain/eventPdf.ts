@@ -3,10 +3,10 @@ import type { Client, StudioEvent } from './types';
 import { eventPdfWordmark } from './eventPdfWordmark';
 
 const layout = {
-  top: 22, bottom: 18, header: 85, booking: 136,
-  detailsTop: 14, detailsHeading: 26, detailsRow: 50,
-  paymentGap: 8, payment: 114, footer: 68,
-  historyHeading: 28, historyRow: 36,
+  top: 22, bottom: 18, header: 88, booking: 152,
+  detailsTop: 14, detailsHeading: 27, detailsRow: 65,
+  paymentGap: 8, payment: 118, footer: 68,
+  historyHeading: 31, historyRow: 50,
 };
 
 export function eventPdfPage(event: StudioEvent) {
@@ -69,21 +69,21 @@ export function eventPdfHtml(event: StudioEvent, client?: Client, fonts?: { regu
   ${fontCss}
   @page { size: ${page.width}pt ${page.height}pt; margin: 0; }
   * { box-sizing: border-box; }
-  body { margin: 0; color: #13233e; background: #fff; font: 11pt/1.4 Inter, Arial, sans-serif; }
+  body { margin: 0; color: #13233e; background: #fff; font: 12pt/1.35 Inter, Arial, sans-serif; }
   .ticket { margin: ${layout.top}pt auto ${layout.bottom}pt; width: calc(100% - 64pt); max-width: 530pt; }
   header { display: flex; align-items: center; justify-content: space-between; height: ${layout.header}pt; gap: 16pt; padding-bottom: 10pt; }
   .brand { flex: 1; min-width: 0; }
   .wordmark { display: block; width: 197pt; max-width: 100%; height: auto; }
-  .address { margin: 4pt 0 0; color: #526482; font-size: 8.5pt; }
+  .address { margin: 4pt 0 0; color: #526482; font-size: 10pt; }
   .document-label { text-align: right; }
-  .document-label strong { display: block; font-size: 12pt; color: #18366a; }
-  .eyebrow, .label { font-size: 8.5pt; letter-spacing: 1pt; text-transform: uppercase; font-weight: 700; }
+  .document-label strong { display: block; font-size: 13pt; color: #18366a; }
+  .eyebrow, .label { font-size: 9.5pt; letter-spacing: .8pt; text-transform: uppercase; font-weight: 700; }
   .eyebrow { color: #526482; margin: 3pt 0 0; }
   .booking, .balance-box { position: relative; isolation: isolate; overflow: hidden; }
   .panel-art { display: block; position: absolute; inset: 0; width: 100%; height: 100%; z-index: -1; }
   .booking { display: flex; flex-direction: column; justify-content: center; height: ${layout.booking}pt; border-radius: 14pt; padding: 12pt 20pt; color: #fff; background: #114994; border: 1pt solid #174b9e; }
   .booking .eyebrow { color: #e3edff; margin: 0; }
-  h1 { margin: 7pt 0 13pt; font-size: 24pt; line-height: 1.17; }
+  h1 { margin: 7pt 0 12pt; font-size: 26pt; line-height: 1.15; }
   .booking-meta { display: flex; align-items: center; justify-content: space-between; gap: 10pt; border-top: 1pt solid #7da8e6; padding-top: 8pt; }
   .date { margin: 0; font-weight: 700; }
   .booking-status { position: relative; isolation: isolate; overflow: hidden; display: inline-flex; align-items: center; gap: 5pt; white-space: nowrap; padding: 4pt 8pt; font-size: 10pt; font-weight: 700; color: #12396b; border: 1pt solid #b8d5fb; border-radius: 14pt; }
@@ -91,29 +91,30 @@ export function eventPdfHtml(event: StudioEvent, client?: Client, fonts?: { regu
   .booking-status.completed { color: #0b5c37; border-color: #9fdbb9; }
   .booking-status.cancelled { color: #9f1734; border-color: #ffb2be; }
   .status-icon { width: 10pt; height: 10pt; flex-shrink: 0; }
-  h2 { margin: 0 0 9pt; font-size: 13pt; color: #18366a; }
+  h2 { margin: 0 0 9pt; font-size: 15pt; color: #18366a; }
   section.details { padding: ${layout.detailsTop}pt 0 0; }
   section.details h2 { height: ${layout.detailsHeading}pt; margin: 0; }
   .details-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: ${layout.detailsRow}pt; column-gap: 20pt; }
   .field { min-width: 0; }
   .details-grid .field { border-top: 1pt solid #e0e7f1; padding: 4pt 0; }
   .label { display: block; color: #526482; margin-bottom: 3pt; }
-  .field strong { font-size: 11pt; }
+  .field strong { font-size: 12pt; }
   h1, .field strong { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
+  .details-grid .field strong { -webkit-line-clamp: 3; }
   .payment { height: ${layout.payment}pt; border-top: 1pt dashed #b4c4db; padding-top: 8pt; margin-top: ${layout.paymentGap}pt; }
   .payment-heading { display: flex; justify-content: space-between; align-items: baseline; gap: 10pt; }
-  .payment-heading span { font-size: 9pt; font-weight: 700; color: #214b91; }
+  .payment-heading span { font-size: 10.5pt; font-weight: 700; color: #214b91; }
   .amounts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: center; gap: 10pt; padding: 9pt 0; }
   .amounts > .field { padding-left: 7pt; }
-  .amounts .field strong { font-size: 13pt; }
+  .amounts .field strong { font-size: 14pt; }
   .balance-box { padding: 9pt 10pt; border: 1pt solid #ead6a6; border-radius: 10pt; }
   .balance-box .label { color: #634711; }
   .history h2 { height: ${layout.historyHeading}pt; margin: 0; padding-top: 3pt; }
-  .history-row { display: grid; grid-template-columns: minmax(0, 1fr) 102pt 100pt; gap: 10pt; align-items: center; height: ${layout.historyRow}pt; border-top: 1pt solid #e0e7f1; }
-  .history-note { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
-  .history-date { color: #526482; font-size: 10pt; }
-  .history-amount { color: #126344; font-weight: 700; text-align: right; }
-  footer { height: ${layout.footer}pt; border-top: 1pt solid #e0e7f1; padding-top: 8pt; text-align: center; color: #526482; font-size: 8.5pt; }
+  .history-row { display: grid; grid-template-columns: minmax(0, 1fr) 100pt 122pt; gap: 10pt; align-items: center; height: ${layout.historyRow}pt; border-top: 1pt solid #e0e7f1; }
+  .history-note { font-size: 12pt; line-height: 1.25; font-weight: 700; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; overflow-wrap: anywhere; }
+  .history-date { color: #526482; font-size: 11pt; }
+  .history-amount { color: #126344; font-size: 13pt; font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; overflow-wrap: anywhere; }
+  footer { height: ${layout.footer}pt; border-top: 1pt solid #e0e7f1; padding-top: 8pt; text-align: center; color: #526482; font-size: 9.5pt; }
   .socials { display: flex; justify-content: center; align-items: center; gap: 8pt; margin-top: 4pt; }
   .socials a { display: inline-flex; align-items: center; gap: 4pt; color: #174b9e; font-weight: 700; text-decoration: underline; }
   .socials svg { width: 13pt; height: 13pt; }

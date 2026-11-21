@@ -1,5 +1,5 @@
 import { themeNames } from './types';
-import type { Client, ClientInput, EventInput, Profile, StudioData, StudioEvent } from './types';
+import type { Client, ClientInput, EventInput, PhotoGallery, Profile, StudioData, StudioEvent } from './types';
 export function validateProfile(profile: Profile) {
   if (!profile.name.trim() || !profile.studioName.trim()) throw new Error('Enter your name and studio name.');
   if (!/^[a-zA-Z0-9_.-]{3,40}$/.test(profile.username)) throw new Error('Username must be 3–40 letters, numbers, dots, dashes or underscores.');
@@ -7,6 +7,7 @@ export function validateProfile(profile: Profile) {
 }
 export const phoneDigits = (phone: string) => phone.replace(/\D/g, '');
 export const isClientPhone = (phone: string) => /^\+?[\d\s().-]+$/.test(phone) && /^\d{7,15}$/.test(phoneDigits(phone));
+export const isGoogleDriveLink = (link: string) => link.length <= 2048 && /^https:\/\/drive\.google\.com\/[a-z0-9][^\s\\]*$/i.test(link);
 export function validateClient(client: ClientInput) {
   if (!client.name.trim()) throw new Error('Enter the client name.');
   if (client.phone && !isClientPhone(client.phone)) throw new Error('Enter a valid phone number.');
@@ -45,6 +46,18 @@ export function assertStudioData(value: unknown): asserts value is StudioData {
     if (!c || typeof c.id !== 'string' || !c.id || clientIds.has(c.id) || ![c.name, c.phone, c.email, c.notes, c.createdAt].every(x => typeof x === 'string')) throw new Error('A saved client is damaged.');
     clientIds.add(c.id); validateClient(c);
   }
+  if (data.photoGalleries !== undefined) {
+    if (!Array.isArray(data.photoGalleries)) throw new Error('The saved photo galleries are invalid.');
+    const galleryIds = new Set<string>();
+    for (const gallery of data.photoGalleries) {
+      if (!gallery || typeof gallery.id !== 'string' || !gallery.id || galleryIds.has(gallery.id)
+        || !clientIds.has(gallery.clientId) || typeof gallery.driveLink !== 'string' || !isGoogleDriveLink(gallery.driveLink)
+        || typeof gallery.createdAt !== 'string' || !Number.isFinite(Date.parse(gallery.createdAt))) {
+        throw new Error('A saved photo gallery is invalid.');
+      }
+      galleryIds.add(gallery.id);
+    }
+  }
   const eventIds = new Set<string>();
   for (const e of data.events) {
     if (!e || typeof e.id !== 'string' || !e.id || eventIds.has(e.id) || ![e.title, e.date, e.location, e.notes, e.createdAt].every(x => typeof x === 'string') || !Array.isArray(e.crew) || !Array.isArray(e.equipment) || !Array.isArray(e.payments)) throw new Error('A saved event is damaged.');
@@ -53,7 +66,13 @@ export function assertStudioData(value: unknown): asserts value is StudioData {
 }
 export function removeClient(data: StudioData, id: string): StudioData {
   if (data.events.some(e => e.clientId === id)) throw new Error('This client is linked to an event. Edit or delete the linked events first.');
+  if (data.photoGalleries?.some(gallery => gallery.clientId === id)) throw new Error('This client is linked to a photo gallery.');
   return { ...data, clients: data.clients.filter(c => c.id !== id) };
+}
+export function addPhotoGallery(data: StudioData, gallery: PhotoGallery): StudioData {
+  if (!data.clients.some(client => client.id === gallery.clientId)) throw new Error('Choose an existing client.');
+  if (!isGoogleDriveLink(gallery.driveLink)) throw new Error('Enter a valid Google Drive link.');
+  return { ...data, photoGalleries: [...(data.photoGalleries ?? []), gallery] };
 }
 export function putEvent(data: StudioData, input: EventInput, id: string, createdAt: string): StudioData {
   validateEvent(input, data.clients);

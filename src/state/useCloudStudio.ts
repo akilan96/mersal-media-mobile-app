@@ -6,6 +6,7 @@ import { apiRequest, ApiRequestError, cloudApiUrl } from '../services/cloudApi';
 import { emptyStudio } from '../services/repository';
 import { assertStudioData } from '../domain/validation';
 import type { StudioContext } from './StudioProvider';
+import type { AccountRole, ManagedAccount, StudioEvent } from '../domain/types';
 
 const sessionKey = 'mersal.cloud.session.v1';
 type Session = { token: string; expiresAt: string };
@@ -40,6 +41,7 @@ function photoType(buffer: ArrayBuffer) {
 export function useCloudStudio(): StudioContext {
   const [data, setData] = useState(emptyStudio);
   const [authenticated, setAuthenticated] = useState(false);
+  const [role, setRole] = useState<AccountRole>();
   const [loading, setLoading] = useState(true);
   const [storageError, setStorageError] = useState<string | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
@@ -53,12 +55,33 @@ export function useCloudStudio(): StudioContext {
     session.current = null;
     latest.current = emptyStudio;
     setAuthenticated(false);
+    setRole(undefined);
     setData(emptyStudio);
     setStorageError(null);
     if (sessionStorage) await SecureStore.deleteItemAsync(sessionKey);
   }, []);
 
   const refresh = useCallback(async (active: Session, withPhoto = false) => {
+    const identityResponse = await apiRequest('/auth/me', { token: active.token }).catch(error => {
+      if (error instanceof ApiRequestError && error.status === 404) {
+        throw new Error('The studio server needs an update before you can sign in. Deploy the latest backend to Vercel.');
+      }
+      throw error;
+    });
+    const identity = await identityResponse.json();
+    const nextRole = identity.role;
+    if (nextRole !== 'owner' && nextRole !== 'admin' && nextRole !== 'client') {
+      throw new Error('Could not verify this account’s access.');
+    }
+    if (session.current !== active) return;
+    if (nextRole === 'client') {
+      latest.current = emptyStudio;
+      setData(emptyStudio);
+      setRole(nextRole);
+      setAuthenticated(true);
+      setStorageError(null);
+      return;
+    }
     const response = await apiRequest('/studio', { token: active.token });
     const result = await response.json();
     assertStudioData(result.data);
@@ -75,6 +98,7 @@ export function useCloudStudio(): StudioContext {
     if (session.current !== active) return;
     latest.current = { ...result.data, homePhoto };
     setData(latest.current);
+    setRole(nextRole);
     setAuthenticated(true);
     setStorageError(null);
   }, []);
@@ -166,8 +190,21 @@ export function useCloudStudio(): StudioContext {
     return mutate(token => apiRequest(path, { method, token, json })).then(() => undefined);
   }
 
+  const listAccounts = useCallback(async () => {
+    const active = session.current;
+    if (!active) throw new Error('Sign in to continue.');
+    const response = await apiRequest('/accounts', { token: active.token });
+    return await response.json() as ManagedAccount[];
+  }, []);
+
   return {
-    cloud: true, configured: true, data, authenticated, loading, storageError, authError, busy, retryLoad,
+    cloud: true, configured: true, data, authenticated, role, loading, storageError, authError, busy, retryLoad, listAccounts,
+    async createAccount(account) {
+      const active = session.current;
+      if (!active) throw new Error('Sign in to continue.');
+      const response = await apiRequest('/accounts', { method: 'POST', token: active.token, json: account });
+      return await response.json() as ManagedAccount;
+    },
     setup: (profile, secret, joinCode) => signIn('/auth/register', {
       username: profile.username, ...(/^\d{4}$/.test(secret) ? { pin: secret } : { password: secret }), profile, joinCode,
     }),
@@ -182,6 +219,7 @@ export function useCloudStudio(): StudioContext {
     async changePin() { throw new Error('Cloud accounts sign in with a password.'); },
     saveProfile({ username: _username, ...profile }) { return write('/profile', 'PATCH', profile); },
     setTheme(theme) { return write('/settings', 'PATCH', { theme }); },
+    savePhotoGallery(clientId, driveLink) { return write('/photo-galleries', 'POST', { clientId, driveLink }); },
     addEventType(name) { return write('/event-types', 'POST', { name }); },
     async setHomePhoto(uri) {
       if (!uri) {
@@ -205,7 +243,13 @@ export function useCloudStudio(): StudioContext {
         return id;
       });
     },
-    recordPayment(id, amount, note) { return write('/events/' + id + '/payments', 'POST', { amount, note }); },
+    recordPayment(id, amount, note) {
+      return mutate(async token => {
+        const response = await apiRequest('/events/' + id + '/payments', { method: 'POST', token, json: { amount, note } });
+        return await response.json() as StudioEvent;
+      });
+    },
+    setEventStatus(id, status) { return write('/events/' + id + '/status', 'PATCH', { status }); },
     deleteEvent(id) { return write('/events/' + id, 'DELETE'); },
     saveClient(input, id) {
       return mutate(async token => {

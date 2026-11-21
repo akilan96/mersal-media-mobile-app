@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Alert, Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Image, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Feather from '@expo/vector-icons/Feather';
 import Constants from 'expo-constants';
 import { Brand, Button, CameraArt, Card, ErrorMessage, Field, Header, IconButton, Screen } from '../components/ui';
+import { useToast } from '../components/Toast';
 import { defaultEventTypes, type Profile } from '../domain/types';
 import { daisyThemes } from '../daisyThemes';
 import * as ImagePicker from 'expo-image-picker';
@@ -20,10 +21,11 @@ const blankProfile: Profile = { name: '', studioName: '', username: '', phone: '
 
 export default function SettingsScreen() {
   const navigation = useStudioNavigation();
+  const showToast = useToast();
   const { colors, ui } = useStudioTheme();
   const styles = makeStyles(colors);
  
-  const { cloud, data, saveProfile, changePin, lock, setTheme, setHomePhoto, addEventType } = useStudio();
+  const { cloud, role, data, saveProfile, changePin, lock, setTheme, setHomePhoto, addEventType } = useStudio();
   const currentTheme = settingsThemes.find(option => option === data.theme) ?? 'light';
   const [settingsBusy, setSettingsBusy] = useState(false);
   const [settingsError, setSettingsError] = useState('');
@@ -175,21 +177,28 @@ export default function SettingsScreen() {
           <Text style={[styles.rowTitle, ui.flex]}>Payments</Text>
           <Feather name="chevron-right" size={22} color={colors.primary} />
         </Pressable>
+        {role === 'owner' && <Pressable accessibilityRole="button" onPress={() => navigation.navigate('Accounts')} style={styles.settingRow}>
+          <View style={styles.settingIcon}><Feather name="users" size={22} color={colors.primary} /></View>
+          <Text style={[styles.rowTitle, ui.flex]}>Accounts</Text>
+          <Feather name="chevron-right" size={22} color={colors.primary} />
+        </Pressable>}
         <Pressable accessibilityRole="button" onPress={confirmLogout} style={[styles.settingRow, { borderBottomWidth: 0 }]}>
           <View style={[styles.settingIcon, { backgroundColor: colors.errorBg }]}><Feather name="log-out" size={22} color={colors.error} /></View>
           <Text style={[styles.rowTitle, ui.flex, { color: colors.error }]}>Log out</Text>
           <Feather name="chevron-right" size={22} color={colors.error} />
         </Pressable>
       </Card>
-      <View style={styles.storageNote}>
+      {!cloud && <View style={styles.storageNote}>
         <Feather name="smartphone" size={17} color={colors.primary} />
-        <Text style={[ui.small, ui.flex]}>{cloud ? 'Cloud studio · Your events and clients are saved online.' : 'Local studio · Events and clients are stored on this device. Your PIN locks access to the app.'}</Text>
-      </View>
-      <View style={styles.tagline}><Text style={styles.taglineText}>Beyond the algorithm</Text><Feather name="heart" size={17} color={colors.primary} /></View>
+        <Text style={[ui.small, ui.flex]}>Events and clients are stored on this device. Your PIN locks access to the app.</Text>
+      </View>}
       <Card>
         <View style={ui.row}>
           <Image source={require('../../assets/design/ameyy-logo.jpeg')} style={styles.companyLogo} resizeMode="contain" />
-          <Text style={[ui.label, ui.flex]}>Ameyy Digital Services</Text>
+          <View style={ui.flex}>
+            <Text style={ui.label}>Ameyy Digital Services</Text>
+            <Text style={ui.small}>Digital With Intention</Text>
+          </View>
         </View>
         <View style={styles.settingRow}>
           <View style={styles.settingIcon}><Feather name="info" size={22} color={colors.primary} /></View>
@@ -242,6 +251,9 @@ export default function SettingsScreen() {
                 await addEventType(eventType);
                 setEventType('');
                 setEventTypeError('');
+                Keyboard.dismiss();
+                setPanel(null);
+                showToast('Event type created');
               } catch (cause) {
                 setEventTypeError(failureMessage(cause));
               }
@@ -294,8 +306,6 @@ const makeStyles = (colors: Palette) => StyleSheet.create({
   rowTitle: { color: colors.text, fontSize: 15, fontFamily: 'InterBold' },
   rowValue: { color: colors.muted, fontSize: 13, fontFamily: 'InterMedium' },
   storageNote: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingHorizontal: 8, paddingTop: 23 },
-  tagline: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 10, paddingVertical: 36 },
-  taglineText: { color: colors.muted, fontSize: 15, fontStyle: 'italic', letterSpacing: 0.6 },
   modal: { flex: 1, backgroundColor: colors.background },
   modalContent: { padding: 20, gap: 20, paddingBottom: 40 },
 });

@@ -1,5 +1,5 @@
 import React, { type ComponentProps, type ReactNode, useState } from 'react';
-import { ActivityIndicator, Image, KeyboardAvoidingView, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View, type StyleProp, type TextInputProps, type ViewStyle } from 'react-native';
+import { ActivityIndicator, Image, KeyboardAvoidingView, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View, type StyleProp, type TextInputProps, type TextStyle, type ViewStyle } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Feather from '@expo/vector-icons/Feather';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -23,23 +23,23 @@ export function Card({ children, style }: { children: ReactNode; style?: StylePr
   const { colors } = useStudioTheme();
   const styles = makeStyles(colors);
   return <View style={[styles.card, style]}>{children}</View>; }
-export function Button({ title, onPress, variant = 'primary', icon, loading = false, disabled = false, style }: { title: string; onPress: () => void; variant?: 'primary' | 'secondary' | 'ghost' | 'danger'; icon?: IconName; loading?: boolean; disabled?: boolean; style?: StyleProp<ViewStyle> }) {
+export function Button({ title, onPress, variant = 'primary', icon, loading = false, disabled = false, style, textStyle }: { title: string; onPress: () => void; variant?: 'primary' | 'secondary' | 'ghost' | 'danger'; icon?: IconName; loading?: boolean; disabled?: boolean; style?: StyleProp<ViewStyle>; textStyle?: StyleProp<TextStyle> }) {
   const { colors } = useStudioTheme();
   const styles = makeStyles(colors);
  
   const foreground = variant === 'primary' ? colors.onPrimary : variant === 'danger' ? colors.error : colors.primaryDark;
-  const child = <>{loading ? <ActivityIndicator size="small" color={foreground} /> : icon ? <Feather name={icon} size={18} color={foreground} /> : null}<Text style={[styles.buttonText, { color: foreground }]}>{title}</Text></>;
+  const child = <>{loading ? <ActivityIndicator size="small" color={foreground} /> : icon ? <Feather name={icon} size={18} color={foreground} /> : null}<Text style={[styles.buttonText, { color: foreground }, textStyle]}>{title}</Text></>;
   return <Pressable accessibilityRole="button" accessibilityLabel={title} accessibilityState={{ disabled: disabled || loading, busy: loading }} onPress={onPress} disabled={disabled || loading} style={({ pressed }) => [styles.buttonBase, variant === 'secondary' && styles.outlineButton, variant === 'ghost' && styles.ghostButton, variant === 'danger' && styles.dangerButton, (disabled || loading) && { opacity: 0.55 }, pressed && { opacity: 0.8, transform: [{ scale: 0.99 }] }, style]}>
     {variant === 'primary' ? <LinearGradient colors={[colors.primary, colors.primary]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.buttonInner}>{child}</LinearGradient> : <View style={styles.buttonInner}>{child}</View>}
   </Pressable>;
 }
-export function Field({ label, error, icon, style, onFocus, onBlur, variant, ...props }: TextInputProps & { label?: string; error?: string; icon?: IconName; variant?: 'studio-form' }) {
+export function Field({ label, labelStyle, error, icon, style, onFocus, onBlur, variant, ...props }: TextInputProps & { label?: string; labelStyle?: StyleProp<TextStyle>; error?: string; icon?: IconName; variant?: 'studio-form' }) {
   const { colors, ui } = useStudioTheme();
   const styles = makeStyles(colors);
  
   const [focused, setFocused] = useState(false);
   return <View style={{ gap: 8 }}>
-    {label && <Text style={ui.label}>{label}</Text>}
+    {label && <Text style={[ui.label, labelStyle]}>{label}</Text>}
     <View style={[styles.fieldShell, variant === 'studio-form' && styles.studioFieldShell, focused && { borderColor: colors.primary, backgroundColor: colors.card }, !!error && { borderColor: colors.error }, props.editable === false && { opacity: 0.6 }]}>
       {icon && (
         <View style={[styles.fieldIcon, variant === 'studio-form' && icon === 'map-pin' && styles.locationIcon]}>

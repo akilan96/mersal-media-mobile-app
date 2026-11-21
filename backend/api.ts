@@ -2,8 +2,8 @@ import { createHash, randomBytes, randomUUID, scrypt, timingSafeEqual } from 'no
 import express, { type ErrorRequestHandler, type Response } from 'express';
 import { rateLimit } from 'express-rate-limit';
 import { z } from 'zod';
-import { defaultEventTypes, themeNames, type StudioData } from '../src/domain/types';
-import { assertStudioData, isClientPhone, phoneDigits, putEvent, removeClient } from '../src/domain/validation';
+import { defaultEventTypes, themeNames, type AccountRole, type StudioData } from '../src/domain/types';
+import { addPhotoGallery, assertStudioData, isClientPhone, isGoogleDriveLink, phoneDigits, putEvent, removeClient } from '../src/domain/validation';
 import { eventSummary, upcomingEvents } from '../src/domain/helpers';
 import { StoreError, type StudioStore } from './store';
 
@@ -21,6 +21,8 @@ const statuses = z.enum(['Scheduled', 'Editing', 'Completed', 'Cancelled']);
 const name = z.string().trim().min(1).max(100);
 const username = z.string().trim().regex(/^[a-zA-Z0-9_.-]{3,40}$/).transform(value => value.toLowerCase());
 const password = z.string().min(12).max(128);
+const pin = z.string().regex(/^\d{4}$/, 'Enter exactly four digits.');
+const managedAccount = z.object({ username, name, pin, role: z.enum(['admin', 'client']) });
 const phone = z.string().trim().max(25).refine(value => value === '' || isClientPhone(value));
 const email = z.union([z.literal(''), z.email().max(150)]).default('');
 const profileFields = z.object({ name, studioName: name, phone: phone.default(''), email });
@@ -41,7 +43,8 @@ const createAccount = credentials.extend({ profile: profileFields, joinCode: z.s
 const receipt = z.object({ amount: z.number().positive(), note: z.string().trim().min(1).max(200).default('Payment received') });
 const theme = z.union([z.enum(themeNames), z.literal('pancake')]);
 
-export function createExpressApi(store: StudioStore, app = express(), sharedSignup?: { joinCode?: string; pinMode?: boolean }) {
+export function createExpressApi(store: StudioStore, app = express(), sharedSignup?: { joinCode?: string; pinMode?: boolean; ownerUsername?: string }) {
+  const ownerUsername = sharedSignup?.ownerUsername?.trim().toLowerCase();
   app.disable('x-powered-by');
   app.use((_req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
   app.use(express.json({ limit: '64kb' }));
@@ -54,7 +57,7 @@ export function createExpressApi(store: StudioStore, app = express(), sharedSign
 
   function authInput(body: unknown) {
     if (!sharedSignup?.pinMode) return credentials.parse(body);
-    return z.object({ username, pin: z.string().regex(/^\d{4}$/, 'Enter exactly four digits.') }).parse(body);
+    return z.object({ username, pin }).parse(body);
   }
 
   function issueSession(studioId: string) {
@@ -67,6 +70,7 @@ export function createExpressApi(store: StudioStore, app = express(), sharedSign
   }
 
   api.post('/auth/register', authLimit, async (req, res) => {
+    if (ownerUsername) throw new ApiError(403, 'Ask the studio owner to create your account.');
     const auth = authInput(req.body);
     const input = { ...createAccount.pick({ profile: true, joinCode: true }).parse(req.body), ...auth };
     if (sharedSignup) {
@@ -119,9 +123,22 @@ export function createExpressApi(store: StudioStore, app = express(), sharedSign
     const token = req.get('Authorization')?.match(/^Bearer ([A-Za-z0-9_-]{43})$/i)?.[1];
     if (!token) throw new ApiError(401, 'Sign in to continue.');
     const hash = tokenHash(token);
-    const studioId = await store.findSession(hash, Date.now());
-    if (!studioId) throw new ApiError(401, 'Session expired or invalid.');
-    res.locals.studioId = studioId;
+    if (ownerUsername) {
+      const account = await store.findAccountSession?.(hash, Date.now());
+      if (!account) throw new ApiError(401, 'Session expired or invalid.');
+      const role: AccountRole = account.username === ownerUsername ? 'owner' : account.role;
+      res.locals.account = { username: account.username, role };
+      res.locals.studioId = 'shared';
+      if (role === 'client' && !(req.method === 'GET' && req.path === '/auth/me')
+        && !(req.method === 'POST' && req.path === '/auth/logout')) {
+        throw new ApiError(403, 'This account can only access the client area.');
+      }
+    } else {
+      const studioId = await store.findSession(hash, Date.now());
+      if (!studioId) throw new ApiError(401, 'Session expired or invalid.');
+      res.locals.studioId = studioId;
+      res.locals.account = { role: 'admin' };
+    }
     res.locals.sessionHash = hash;
     next();
   });
@@ -158,6 +175,24 @@ export function createExpressApi(store: StudioStore, app = express(), sharedSign
   api.post('/auth/logout', async (_req, res) => {
     await store.revokeSession(res.locals.sessionHash);
     res.sendStatus(204);
+  });
+  api.get('/auth/me', (_req, res) => res.json(res.locals.account));
+  api.use('/accounts', (_req, res, next) => {
+    if (res.locals.account.role !== 'owner') throw new ApiError(403, 'Only the studio owner can manage accounts.');
+    next();
+  });
+  api.get('/accounts', async (_req, res) => {
+    if (!store.listManagedAccounts) throw new ApiError(503, 'Account management is unavailable.');
+    res.json((await store.listManagedAccounts()).filter(account => account.username !== ownerUsername));
+  });
+  api.post('/accounts', async (req, res) => {
+    if (!store.createManagedAccount) throw new ApiError(503, 'Account management is unavailable.');
+    const account = managedAccount.parse(req.body);
+    if (account.username === ownerUsername || !await store.createManagedAccount(randomUUID(), account)) {
+      throw new ApiError(409, 'Username is already in use.');
+    }
+    const { pin: _pin, ...publicAccount } = account;
+    res.status(201).json(publicAccount);
   });
   api.get('/studio', async (_req, res) => {
     const { data, revision } = await load(res);
@@ -206,9 +241,18 @@ export function createExpressApi(store: StudioStore, app = express(), sharedSign
     await update(res, data => {
       if (!data.clients.some(client => client.id === req.params.id)) throw new ApiError(404, 'Client not found.');
       if (data.events.some(event => event.clientId === req.params.id)) throw new ApiError(409, 'Unlink this client from events before deleting.');
+      if (data.photoGalleries?.some(gallery => gallery.clientId === req.params.id)) throw new ApiError(409, 'This client is linked to a photo gallery.');
       return { data: removeClient(data, req.params.id), result: null };
     });
     res.sendStatus(204);
+  });
+  api.post('/photo-galleries', async (req, res) => {
+    const input = z.object({ clientId: z.uuid(), driveLink: z.string().trim().refine(isGoogleDriveLink, 'Enter a valid Google Drive link.') }).parse(req.body);
+    const gallery = { ...input, id: randomUUID(), createdAt: stamp() };
+    res.status(201).json(await update(res, data => {
+      if (!data.clients.some(client => client.id === input.clientId)) throw new ApiError(422, 'Choose an existing client.');
+      return { data: addPhotoGallery(data, gallery), result: gallery };
+    }));
   });
 
   api.get('/events', async (_req, res) => { res.json((await load(res)).data.events); });

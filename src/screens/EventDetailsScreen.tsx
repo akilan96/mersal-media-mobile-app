@@ -1,6 +1,6 @@
 import { useToast } from '../components/Toast';
 import React, { useRef, useState } from 'react';
-import { Alert, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Keyboard, Modal, StyleSheet, Text, TextInput, View } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -11,11 +11,14 @@ import { Inter_700Bold } from '@expo-google-fonts/inter/700Bold';
 import * as FileSystem from 'expo-file-system/legacy';
 import { eventPdfFileName, eventPdfHtml, eventPdfPage } from '../domain/eventPdf';
 import * as Sharing from 'expo-sharing';
+import { useAudioPlayer } from 'expo-audio';
 import { Badge, Button, CameraArt, Card, EmptyState, ErrorMessage, Field, Header, IconButton, Screen, SectionTitle } from '../components/ui';
 import { useStudioTheme, type Palette } from '../theme';
 import { useStudio } from '../state/StudioProvider';
 import { balanceAmount, formatDate, formatTime, money, paidAmount, paymentLabel } from '../domain/helpers';
-import type { EventStatus, RootStackParamList } from '../domain/types';
+import type { EventStatus, RootStackParamList, StudioEvent } from '../domain/types';
+
+type PaymentReceipt = { amount: number; event: StudioEvent };
 
 async function readFont(moduleId: number) {
   const asset = await Asset.fromModule(moduleId).downloadAsync();
@@ -25,15 +28,20 @@ async function readFont(moduleId: number) {
 
 export default function EventDetailsScreen() {
   const showToast = useToast();
+  const paymentSound = useAudioPlayer(require('../../assets/audio/payment.mp3'));
   const { colors, ui } = useStudioTheme();
   const styles = makeStyles(colors);
  
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<RouteProp<RootStackParamList, 'EventDetails'>>();
-  const { data, saveEvent, deleteEvent, recordPayment } = useStudio();
+  const { data, setEventStatus, deleteEvent, recordPayment } = useStudio();
   const event = data.events.find(item => item.id === route.params.eventId);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [pendingStatus, setPendingStatus] = useState<EventStatus | null>(null);
+  const [savingPayment, setSavingPayment] = useState(false);
+  const [receipt, setReceipt] = useState<PaymentReceipt | null>(null);
+  const paymentInProgress = useRef(false);
   const [sharingPdf, setSharingPdf] = useState(false);
   const pdfInProgress = useRef(false);
   const [paymentAmount, setPaymentAmount] = useState('');
@@ -43,14 +51,15 @@ export default function EventDetailsScreen() {
   const fail = (cause: unknown) => setError(cause instanceof Error ? cause.message : 'Something went wrong. Please try again.');
 
   async function updateStatus(status: EventStatus) {
-    if (!event || busy) return;
-    setBusy(true); setError('');
+    if (!event || busy || event.status === status) return;
+    setBusy(true); setPendingStatus(status); setError('');
     try {
-      await saveEvent({ ...event, status }, event.id);
+      await setEventStatus(event.id, status);
       showToast('Status updated to ' + status, { sound: true });
     } catch (cause) {
       fail(cause);
     } finally {
+      setPendingStatus(null);
       setBusy(false);
     }
   }
@@ -111,15 +120,25 @@ export default function EventDetailsScreen() {
   }
 
   async function addPayment() {
-    if (!event || busy) return;
+    if (!event || busy || paymentInProgress.current) return;
     const amount = Number(paymentAmount);
     if (!/^\d+(\.\d{1,2})?$/.test(paymentAmount) || !Number.isFinite(amount) || amount <= 0) { setPaymentError('Enter an amount greater than zero with up to 2 decimals.'); return; }
     if (amount > Math.round(balanceAmount(event) * 100) / 100) { setPaymentError('This payment exceeds the remaining balance.'); return; }
-    setPaymentError(''); setError(''); setBusy(true);
+    paymentInProgress.current = true;
+    Keyboard.dismiss();
+    setPaymentError(''); setError(''); setBusy(true); setSavingPayment(true);
     try {
-      await recordPayment(event.id, amount, paymentNote.trim() || 'Payment received');
+      const saved = await recordPayment(event.id, amount, paymentNote.trim() || 'Payment received');
       setPaymentAmount(''); setPaymentNote('');
-    } catch (cause) { fail(cause); } finally { setBusy(false); }
+      setReceipt({ amount, event: saved });
+      void paymentSound.seekTo(0).then(() => paymentSound.play()).catch(() => undefined);
+    } catch (cause) {
+      setPaymentError(cause instanceof Error ? cause.message : 'Could not save the payment. Please try again.');
+    } finally {
+      paymentInProgress.current = false;
+      setSavingPayment(false);
+      setBusy(false);
+    }
   }
   function showOptions() {
     if (!event || busy) return;
@@ -156,9 +175,9 @@ export default function EventDetailsScreen() {
       {event.payments.length ? event.payments.map(payment => <View key={payment.id} style={ui.between}><View style={{ flex: 1, gap: 3 }}><Text style={ui.label}>{payment.note}</Text><Text style={ui.small}>{formatDate(payment.date)}</Text></View><Text style={styles.payment}>{money(payment.amount)}</Text></View>) : <Text style={ui.body}>No payments received yet.</Text>}
       <View style={styles.divider} /><View style={ui.between}><Text style={ui.label}>Remaining balance</Text><Text style={ui.heading}>{money(balanceAmount(event))}</Text></View>
       {balanceAmount(event) > 0 && <View style={ui.gap}>
-        <Field label="Record a Payment (₹)" placeholder="Amount received" keyboardType="decimal-pad" value={paymentAmount} onChangeText={setPaymentAmount} error={paymentError} editable={!busy} maxLength={16} />
+        <PaymentAmountField value={paymentAmount} onChangeText={value => { setPaymentAmount(value); setPaymentError(''); }} error={paymentError} editable={!busy} />
         <Field label="Payment Note" placeholder="Cash, bank transfer, receipt reference…" value={paymentNote} onChangeText={setPaymentNote} editable={!busy} maxLength={200} />
-        <Button title="Add Payment" icon="plus" variant="secondary" onPress={addPayment} disabled={busy} />
+        <Button title={savingPayment ? 'Recording payment…' : 'Add Payment'} icon="plus" onPress={addPayment} disabled={busy} loading={savingPayment} />
         <Text style={ui.small}>Records money you have received. This app does not process payments.</Text>
       </View>}
     </Card>
@@ -168,20 +187,85 @@ export default function EventDetailsScreen() {
     <Button title="Share Event PDF" icon="share-2" onPress={shareEvent} disabled={busy} loading={sharingPdf} />
     <Card style={ui.gap}>
       <SectionTitle title="Shoot Workflow" />
+      {pendingStatus && <View style={styles.statusProgress} accessible accessibilityLiveRegion="polite" accessibilityState={{ busy: true }}>
+        <ActivityIndicator color={colors.primary} />
+        <Text style={ui.label}>{pendingStatus === 'Cancelled' ? 'Cancelling event…' : `Updating status to ${pendingStatus}…`}</Text>
+      </View>}
       {event.status === 'Cancelled' ? (
         <Text style={ui.small}>This event is cancelled.</Text>
       ) : (
         <>
           <View style={ui.row}>
-            <Button title="Editing" icon="edit-3" variant="secondary" onPress={() => updateStatus('Editing')} disabled={busy || event.status === 'Editing'} style={ui.flex} />
-            <Button title="Completed" icon="check-circle" variant="secondary" onPress={() => updateStatus('Completed')} disabled={busy || event.status === 'Completed'} style={ui.flex} />
+            <Button title="Editing" icon="edit-3" variant="secondary" onPress={() => updateStatus('Editing')} disabled={busy || event.status === 'Editing'} loading={pendingStatus === 'Editing'} style={ui.flex} />
+            <Button title="Completed" icon="check-circle" variant="secondary" onPress={() => updateStatus('Completed')} disabled={busy || event.status === 'Completed'} loading={pendingStatus === 'Completed'} style={ui.flex} />
           </View>
-          <Button title="Cancel Event" icon="x-circle" variant="danger" onPress={confirmCancellation} disabled={busy} />
+          <Button title="Cancel Event" icon="x-circle" variant="danger" onPress={confirmCancellation} disabled={busy} loading={pendingStatus === 'Cancelled'} />
         </>
       )}
       <Button title="Edit Event" icon="edit" variant="ghost" onPress={() => navigation.navigate('CreateEvent', { eventId: event.id })} disabled={busy} />
     </Card>
+    {receipt && <PaymentConfirmation receipt={receipt} onClose={() => setReceipt(null)} />}
   </Screen>;
+}
+
+function PaymentAmountField({ value, onChangeText, editable, error }: {
+  value: string; onChangeText: (value: string) => void; editable: boolean; error: string;
+}) {
+  const { colors, ui } = useStudioTheme();
+  const styles = makeStyles(colors);
+  const [focused, setFocused] = useState(false);
+
+  return <View style={styles.amountGroup}>
+    <Text style={ui.label}>Payment amount</Text>
+    <View style={[styles.amountField, focused && styles.amountFieldFocused, !!error && styles.amountFieldInvalid]}>
+      <View style={styles.currencyChip} accessible={false}>
+        <Text style={styles.currencySymbol}>₹</Text>
+      </View>
+      <TextInput
+        accessibilityLabel="Payment amount in rupees"
+        value={value}
+        onChangeText={onChangeText}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        keyboardType="decimal-pad"
+        editable={editable}
+        placeholder="0.00"
+        placeholderTextColor={colors.muted}
+        selectionColor={colors.primary}
+        maxLength={16}
+        style={styles.amountInput}
+      />
+    </View>
+    {!!error && <ErrorMessage message={error} />}
+  </View>;
+}
+
+function PaymentConfirmation({ receipt, onClose }: { receipt: PaymentReceipt; onClose: () => void }) {
+  const { colors, ui } = useStudioTheme();
+  const styles = makeStyles(colors);
+  const remaining = balanceAmount(receipt.event);
+
+  return <Modal visible animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
+    <Screen contentStyle={styles.receiptScreen}>
+      <View style={styles.receiptContent}>
+        <View style={styles.receiptIconRing} accessible={false}>
+          <View style={styles.receiptIcon}><Feather name="check" size={50} color="#FFFFFF" /></View>
+        </View>
+        <View style={styles.receiptHeading} accessibilityLiveRegion="polite">
+          <Text accessibilityRole="header" style={[ui.title, styles.receiptCentered]}>{remaining > 0 ? 'Part Payment Received' : 'Payment completed'}</Text>
+          <Text style={[ui.body, styles.receiptCentered]}>{receipt.event.title}</Text>
+          <Text style={[ui.small, styles.receiptCentered]}>Amount received</Text>
+          <Text style={styles.receiptAmount}>{money(receipt.amount)}</Text>
+        </View>
+        <Card style={styles.receiptSummary}>
+          <View style={ui.between}><Text style={ui.label}>Total received</Text><Text style={ui.heading}>{money(paidAmount(receipt.event))}</Text></View>
+          <View style={styles.divider} />
+          <View style={ui.between}><Text style={ui.label}>Remaining balance</Text><Text style={ui.heading}>{money(remaining)}</Text></View>
+        </Card>
+        <Button title="Done" icon="check" onPress={onClose} />
+      </View>
+    </Screen>
+  </Modal>;
 }
 
 function DetailRow({ icon, text }: { icon: React.ComponentProps<typeof Feather>['name']; text: string }) {
@@ -199,4 +283,20 @@ const makeStyles = (colors: Palette) => StyleSheet.create({
   balance: { flexDirection: 'row', justifyContent: 'space-between', gap: 10, alignItems: 'center', backgroundColor: colors.mint, borderRadius: 13, padding: 13 },
   payment: { fontSize: 15, color: colors.success, fontFamily: 'InterExtraBold' },
   total: { borderColor: colors.primary, borderWidth: 1, backgroundColor: colors.mint, borderRadius: 18, padding: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  amountGroup: { gap: 8 },
+  amountField: { flexDirection: 'row', alignItems: 'center', gap: 14, borderRadius: 18, borderWidth: 2, borderColor: colors.border, backgroundColor: colors.input, paddingHorizontal: 12, minHeight: 68 },
+  amountFieldFocused: { borderColor: colors.primary },
+  amountFieldInvalid: { borderColor: colors.error },
+  currencyChip: { width: 42, height: 42, borderRadius: 12, backgroundColor: colors.mint, alignItems: 'center', justifyContent: 'center' },
+  currencySymbol: { color: colors.primaryDark, fontSize: 24, fontFamily: 'InterExtraBold' },
+  amountInput: { flex: 1, color: colors.text, fontSize: 26, fontFamily: 'InterBold', minHeight: 52, paddingVertical: 8 },
+  statusProgress: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderRadius: 12, backgroundColor: colors.mint },
+  receiptScreen: { flexGrow: 1, justifyContent: 'center' },
+  receiptContent: { width: '100%', maxWidth: 440, alignSelf: 'center', gap: 22 },
+  receiptIconRing: { alignSelf: 'center', borderRadius: 68, padding: 10, backgroundColor: colors.successBg },
+  receiptIcon: { width: 96, height: 96, borderRadius: 48, backgroundColor: '#16864C', alignItems: 'center', justifyContent: 'center' },
+  receiptHeading: { gap: 5 },
+  receiptCentered: { textAlign: 'center' },
+  receiptAmount: { color: colors.success, fontSize: 38, lineHeight: 46, textAlign: 'center', fontFamily: 'InterExtraBold', fontVariant: ['tabular-nums'] },
+  receiptSummary: { gap: 12 },
 });

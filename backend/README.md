@@ -47,11 +47,13 @@ Run `npm test` to exercise the API over HTTP against a disposable SQLite file. T
 1. In Atlas, create a database user with the built-in `readWrite` role scoped to the app database. Use an Atlas deployment that supports replica-set transactions. Configure Atlas Network Access to allow connections from your Vercel deployment.
 2. Import this repository into Vercel. Use the repository root and the Express framework preset. The root `server.ts` is the Express entry point. Node.js 22.x or 24.x can run this entry point. The SQLite development server uses Node 26.x.
 3. In Vercel project settings, set `MONGODB_URI` to the Atlas connection string as a server-only environment variable. Set `MONGODB_DB` if your database name differs from `mersal_media`. Use a separate database and credentials for previews if previews are enabled.
-4. Set the server-only `MERSAL_JOIN_CODE` to a random secret of at least 20 characters. Share it only with the people you want to join.
+4. The existing `aki` account is the owner by default. Set the server-only `MERSAL_OWNER_USERNAME` if you have provisioned a different owner account.
 5. Deploy the backend and request `GET /api/v1/health` to initialize the collections and confirm Atlas connectivity.
-6. Restart Expo. On **Join a studio**, create the first account with a username, four-digit PIN, and the join code. The first account sets the shared studio profile.
+6. Reload the updated app. Sign in as the owner and use **Settings → Accounts** to create admins and clients. Public registration is disabled on Atlas. Existing non-owner accounts without a stored role have client access.
 
-Atlas stores usernames and four-digit PINs in `auth`, events in `events`, client records in `clients`, and receipts in `payments` with an `eventId` link. `studio_workspace` stores shared settings and the revision. All authenticated users have the same read and write access. Writes use a transaction and revision check to keep linked records consistent.
+Atlas stores usernames, four-digit PINs, and roles in `auth`, events in `events`, client records in `clients`, and receipts in `payments` with an `eventId` link. `studio_workspace` stores shared settings and the revision. Owners and admins share studio access. Only the owner can list or create accounts. Clients see Photos, Favourites, and Help. Gallery delivery, selection, and favourites persistence are planned separately. Writes use a transaction and revision check to keep linked records consistent.
+
+The staff Photos tab reads its gallery list from `GET /api/v1/studio`. Staff create a gallery with `POST /api/v1/photo-galleries` using an existing `clientId` and an HTTPS Google Drive `driveLink`. Links are stored in the workspace. Adding a link does not change its permissions in Google Drive.
 
 The existing API returns whole lists and snapshots. On Atlas, each studio's JSON snapshot is capped at 4 MiB to fit Vercel's response limit. The current authentication rate limit is per server instance. If you require a deployment-wide limit, enforce it at the edge or configure a shared rate-limit store.
 
@@ -70,7 +72,8 @@ project's .env, then restart Expo with `npx expo start --clear`. This public
 variable contains only the API URL. Keep `MONGODB_URI` server-side. Sign in
 with the studio account that owns the imported events. Native devices store
 the session token in SecureStore. Existing PIN-based workspaces remain
-available when the public API URL is unset. Device records are separate from
+available when `EXPO_PUBLIC_API_URL=local`. An unset URL uses the deployed
+Mersal Media API. Device records are separate from
 the cloud studio and require a separate migration.
 
 For local Android testing with USB debugging, run `npm.cmd run api:atlas`

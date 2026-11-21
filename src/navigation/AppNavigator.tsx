@@ -18,10 +18,13 @@ import PaymentsScreen from '../screens/PaymentsScreen';
 import { WelcomeScreen } from '../screens/WelcomeScreen';
 import { LoginScreen } from '../screens/LoginScreen';
 import { PhotosScreen } from '../screens/PhotosScreen';
+import AccountsScreen from '../screens/AccountsScreen';
+import { ClientFavouritesScreen, ClientHelpScreen, ClientPhotosScreen } from '../screens/ClientAreaScreens';
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tabs = createBottomTabNavigator<MainTabParamList>();
+const ClientTabs = createBottomTabNavigator<{ Photos: undefined; Favourites: undefined; Help: undefined }>();
 const makeNavigationTheme = (colors: Palette, dark: boolean) => ({ ...DefaultTheme, dark, colors: { ...DefaultTheme.colors, primary: colors.primary, background: colors.background, card: colors.card, text: colors.text, border: colors.border } });
-const icons = { Home: 'home', Events: 'calendar', Photos: 'image', Clients: 'users', Settings: 'settings' } as const;
+const icons = { Home: 'home', Events: 'calendar', Photos: 'image', Clients: 'users', Settings: 'settings', Favourites: 'heart', Help: 'help-circle' } as const;
 function TabHighlight({ selected, reduceMotion }: { selected: boolean; reduceMotion: boolean }) {
   const { colors } = useStudioTheme();
   const styles = makeStyles(colors);
@@ -90,12 +93,26 @@ function MainTabs() {
   return <Tabs.Navigator screenOptions={{ headerShown: false, animation: reduceMotion ? 'none' : 'fade', sceneStyle: { backgroundColor: colors.background } }} tabBar={props => <BottomNavigation {...props} reduceMotion={reduceMotion} />}>
   <Tabs.Screen name="Home" component={HomeScreen} /><Tabs.Screen name="Events" component={EventsScreen} /><Tabs.Screen name="Photos" component={PhotosScreen} /><Tabs.Screen name="Clients" component={ClientsScreen} /><Tabs.Screen name="Settings" component={SettingsScreen} />
 </Tabs.Navigator>; }
+
+function ClientArea() {
+  const { colors } = useStudioTheme();
+  return <ClientTabs.Navigator screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: colors.background } }}
+    tabBar={props => <BottomNavigation {...props} reduceMotion />}>
+    <ClientTabs.Screen name="Photos" component={ClientPhotosScreen} />
+    <ClientTabs.Screen name="Favourites" component={ClientFavouritesScreen} />
+    <ClientTabs.Screen name="Help" component={ClientHelpScreen} />
+  </ClientTabs.Navigator>;
+}
+
 export function AppNavigator() {
   const { colors, dark } = useStudioTheme();
  
-  const { authenticated, configured } = useStudio();
-  return <NavigationContainer theme={makeNavigationTheme(colors, dark)}><Stack.Navigator key={authenticated ? 'studio' : configured ? 'unlock' : 'setup'} screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }} initialRouteName={authenticated ? 'Main' : configured ? 'Login' : 'Welcome'}>
-    {authenticated ? <><Stack.Screen name="Main" component={MainTabs} /><Stack.Screen name="CreateEvent" component={CreateEventScreen} /><Stack.Screen name="EventDetails" component={EventDetailsScreen} /><Stack.Screen name="Payments" component={PaymentsScreen} /></> : <>{!configured && <Stack.Screen name="Welcome" component={WelcomeScreen} />}<Stack.Screen name="Login" component={LoginScreen} /></>}
+  const { authenticated, configured, role } = useStudio();
+  return <NavigationContainer theme={makeNavigationTheme(colors, dark)}><Stack.Navigator key={authenticated ? role ?? 'studio' : configured ? 'unlock' : 'setup'} screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }} initialRouteName={authenticated ? 'Main' : configured ? 'Login' : 'Welcome'}>
+    {authenticated ? role === 'client' ? <Stack.Screen name="Main" component={ClientArea} /> : <>
+      <Stack.Screen name="Main" component={MainTabs} /><Stack.Screen name="CreateEvent" component={CreateEventScreen} /><Stack.Screen name="EventDetails" component={EventDetailsScreen} /><Stack.Screen name="Payments" component={PaymentsScreen} />
+      {role === 'owner' && <Stack.Screen name="Accounts" component={AccountsScreen} />}
+    </> : <>{!configured && <Stack.Screen name="Welcome" component={WelcomeScreen} />}<Stack.Screen name="Login" component={LoginScreen} /></>}
   </Stack.Navigator></NavigationContainer>;
 }
 const makeStyles = (colors: Palette) => StyleSheet.create({

@@ -1,56 +1,162 @@
-import React from 'react';
-import { Image, StyleSheet, Text, View } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
-import { Badge, Screen } from '../components/ui';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { PagedList } from '../components/PagedList';
+import { Button, Card, Chip, EmptyState, ErrorMessage, Field, Header } from '../components/ui';
+import { useToast } from '../components/Toast';
+import { formatDate } from '../domain/helpers';
+import { isGoogleDriveLink } from '../domain/validation';
+import { useStudio } from '../state/StudioProvider';
 import { useStudioTheme, type Palette } from '../theme';
 
+const sortChoices = ['Newest', 'Oldest', 'Client'] as const;
+type GallerySort = typeof sortChoices[number];
+
 export function PhotosScreen() {
+  const { data, savePhotoGallery } = useStudio();
   const { colors, ui } = useStudioTheme();
   const styles = makeStyles(colors);
- 
-  return (
-    <Screen contentStyle={styles.content}>
-      <View style={styles.artwork}>
-        <View style={styles.glow} />
-        <Image
-          source={require('../../assets/design/photos-hero.png')}
-          resizeMode="contain"
-          style={styles.hero}
-          accessibilityLabel="Photography camera and printed memories"
-        />
-      </View>
-      <View style={styles.filmBadge} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-        <Feather name="film" size={40} color={colors.primary} />
-      </View>
-      <View><Badge label="COMING SOON" /></View>
-      <Text accessibilityRole="header" style={styles.headline}>
-        Something Beautiful Is Coming Soon
-      </Text>
-      <Text style={styles.subheading}>
-        We’re creating a better way to manage your photography experience.
-      </Text>
-      <Text style={[ui.body, styles.description]}>
-        From capturing precious moments to organizing unforgettable memories, exciting new features are on their way.
-      </Text>
-      <View style={styles.decoration} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-        <View style={styles.dot} />
-        <View style={styles.activeDot} />
-        <View style={styles.dot} />
-      </View>
-    </Screen>
-  );
+  const showToast = useToast();
+
+  const [query, setQuery] = useState('');
+  const [sort, setSort] = useState<GallerySort>('Newest');
+  const [formVisible, setFormVisible] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [clientQuery, setClientQuery] = useState('');
+  const [clientId, setClientId] = useState('');
+  const [driveLink, setDriveLink] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState('');
+  const [listError, setListError] = useState('');
+
+  const galleries = useMemo(() => {
+    const names = new Map(data.clients.map(client => [client.id, client.name]));
+    const term = query.trim().toLowerCase();
+    return (data.photoGalleries ?? []).map(gallery => ({ ...gallery, clientName: names.get(gallery.clientId) ?? '' }))
+      .filter(gallery => gallery.clientName.toLowerCase().includes(term) || gallery.driveLink.toLowerCase().includes(term))
+      .sort((a, b) => {
+        const newestFirst = Date.parse(b.createdAt) - Date.parse(a.createdAt);
+        if (sort === 'Client') return a.clientName.localeCompare(b.clientName) || newestFirst;
+        return sort === 'Oldest' ? -newestFirst : newestFirst;
+      });
+  }, [data.photoGalleries, data.clients, query, sort]);
+
+  const selectedClient = data.clients.find(client => client.id === clientId);
+  const matchingClients = data.clients.filter(client => client.name.toLowerCase().includes(clientQuery.trim().toLowerCase()));
+
+  function openForm() {
+    setClientId(''); setClientQuery(''); setDriveLink(''); setFormError(''); setPickerOpen(false);
+    setFormVisible(true);
+  }
+
+  async function save() {
+    if (saving) return;
+    setFormError('');
+    const link = driveLink.trim();
+    if (!selectedClient) {
+      setFormError('Choose an existing client.');
+      return;
+    }
+    if (!isGoogleDriveLink(link)) {
+      setFormError('Enter a Google Drive link starting with https://drive.google.com/.');
+      return;
+    }
+    setSaving(true);
+    try {
+      await savePhotoGallery(selectedClient.id, link);
+      setFormVisible(false);
+      showToast('Photo gallery created');
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : 'Could not save the gallery.');
+    } finally { setSaving(false); }
+  }
+
+  function openDrive(link: string) {
+    setListError('');
+    void Linking.openURL(link).catch(() => setListError('Could not open the Google Drive link.'));
+  }
+
+  return <>
+    <PagedList items={galleries} scope={JSON.stringify([query, sort])}
+      createAction={{ label: 'Create photo gallery', onPress: openForm }}
+      header={<View style={ui.gap}>
+        <Header title="Photos" />
+        <Field icon="search" accessibilityLabel="Search photo galleries" placeholder="Search client or Drive link"
+          value={query} onChangeText={setQuery} returnKeyType="search" />
+        <View style={styles.sortRow}>
+          <Text style={ui.small}>Sort:</Text>
+          {sortChoices.map(choice => <Chip key={choice} label={choice} selected={choice === sort} onPress={() => setSort(choice)} />)}
+        </View>
+        <Text style={ui.label}>{galleries.length} {galleries.length === 1 ? 'gallery' : 'galleries'}</Text>
+        {!!listError && <ErrorMessage message={listError} />}
+      </View>}
+      empty={<EmptyState icon="image" title={query.trim() ? 'No matching galleries' : 'No photo galleries yet'}
+        description={query.trim() ? 'Try another client name or link.' : 'Use the plus button to add a client’s Drive link.'} />}
+      renderItem={({ item }) => <Card style={styles.galleryCard}>
+        <Pressable accessibilityRole="link" accessibilityLabel={`Open Drive gallery for ${item.clientName}`}
+          onPress={() => openDrive(item.driveLink)} style={({ pressed }) => [styles.galleryRow, pressed && { opacity: 0.7 }]}>
+          <View style={styles.galleryIcon}><Feather name="image" size={21} color={colors.primaryDark} /></View>
+          <View style={styles.galleryDetails}>
+            <Text style={ui.heading}>{item.clientName}</Text>
+            <Text style={ui.small} numberOfLines={1}>{item.driveLink}</Text>
+            <Text style={ui.small}>Added {formatDate(item.createdAt)}</Text>
+          </View>
+          <Feather name="external-link" size={19} color={colors.primaryDark} />
+        </Pressable>
+      </Card>}
+    />
+    <Modal visible={formVisible} animationType="slide" presentationStyle="pageSheet"
+      onRequestClose={() => { if (!saving) setFormVisible(false); }}>
+      <SafeAreaView style={styles.modal} edges={['top', 'bottom', 'left', 'right']}>
+        <KeyboardAvoidingView style={ui.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.form}>
+            <Header title="Create Photo Gallery" onBack={() => { if (!saving) setFormVisible(false); }} />
+            <Card style={ui.gap}>
+              <View style={styles.clientField}>
+                <Text style={ui.label}>Client name</Text>
+                <Pressable accessibilityRole="button" accessibilityState={{ expanded: pickerOpen }} disabled={saving}
+                  style={styles.clientPicker} onPress={() => { setPickerOpen(open => !open); setClientQuery(''); }}>
+                  <Feather name="user" size={18} color={colors.primaryDark} />
+                  <Text style={[ui.body, ui.flex]}>{selectedClient?.name ?? 'Choose an existing client'}</Text>
+                  <Feather name={pickerOpen ? 'chevron-up' : 'chevron-down'} size={18} color={colors.primaryDark} />
+                </Pressable>
+                {pickerOpen && <View style={styles.options}>
+                  {data.clients.length > 0 && <Field icon="search" accessibilityLabel="Find an existing client"
+                    placeholder="Find a client" value={clientQuery} onChangeText={setClientQuery} />}
+                  {!matchingClients.length && <Text style={ui.small}>{data.clients.length ? 'No matching clients.' : 'Add a client from the Clients tab first.'}</Text>}
+                  {matchingClients.map(client => <Pressable key={client.id} accessibilityRole="radio"
+                    accessibilityState={{ checked: client.id === clientId }} style={styles.option} onPress={() => {
+                      setClientId(client.id); setPickerOpen(false); setFormError('');
+                    }}>
+                    <Text style={[ui.label, ui.flex]}>{client.name}</Text>
+                    <Feather name={client.id === clientId ? 'check-circle' : 'circle'} size={17} color={colors.primaryDark} />
+                  </Pressable>)}
+                </View>}
+              </View>
+              <Field label="Google Drive link" icon="link" placeholder="https://drive.google.com/…" value={driveLink}
+                onChangeText={value => { setDriveLink(value); setFormError(''); }} keyboardType="url"
+                autoCapitalize="none" autoCorrect={false} maxLength={2048} editable={!saving} />
+              {!!formError && <ErrorMessage message={formError} />}
+              <Button title="Create Gallery" icon="check" loading={saving} onPress={() => void save()} />
+            </Card>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </Modal>
+  </>;
 }
 
 const makeStyles = (colors: Palette) => StyleSheet.create({
-  content: { flexGrow: 1, alignItems: 'center', gap: 19, paddingBottom: 40 },
-  artwork: { width: '100%', minHeight: 210, justifyContent: 'center', position: 'relative' },
-  glow: { position: 'absolute', width: '90%', height: 170, borderRadius: 90, backgroundColor: colors.mint, alignSelf: 'center' },
-  hero: { width: '100%', aspectRatio: 1.35, maxHeight: 310 },
-  filmBadge: { backgroundColor: colors.mint, width: 86, height: 86, borderRadius: 26, alignItems: 'center', justifyContent: 'center', marginTop: -5, borderWidth: 1, borderColor: '#C7EFEB' },
-  headline: { fontSize: 29, fontFamily: 'InterExtraBold', color: colors.text, textAlign: 'center', letterSpacing: -0.8, lineHeight: 35, maxWidth: 365 },
-  subheading: { color: colors.primary, fontSize: 17, lineHeight: 25, fontFamily: 'InterBold', textAlign: 'center', maxWidth: 360 },
-  description: { textAlign: 'center', maxWidth: 360, lineHeight: 23 },
-  decoration: { flexDirection: 'row', gap: 8, alignItems: 'center', marginTop: 5 },
-  dot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.mint },
-  activeDot: { width: 25, height: 7, borderRadius: 4, backgroundColor: colors.primary },
+  sortRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },
+  galleryCard: { padding: 0, borderRadius: 18 },
+  galleryRow: { flexDirection: 'row', alignItems: 'center', padding: 14, gap: 12, minHeight: 72 },
+  galleryIcon: { width: 42, height: 42, borderRadius: 12, backgroundColor: colors.mint, justifyContent: 'center', alignItems: 'center' },
+  galleryDetails: { flex: 1, minWidth: 0, gap: 3 },
+  modal: { flex: 1, backgroundColor: colors.background },
+  form: { paddingHorizontal: 16, paddingVertical: 14, gap: 14 },
+  clientField: { gap: 8 },
+  clientPicker: { minHeight: 50, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, gap: 10, borderWidth: 1, borderColor: colors.border, borderRadius: 13, backgroundColor: colors.input },
+  options: { borderWidth: 1, borderColor: colors.border, borderRadius: 14, padding: 10, gap: 5 },
+  option: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 6, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
 });

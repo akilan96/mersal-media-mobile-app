@@ -1,6 +1,6 @@
 import { isDeepStrictEqual } from 'node:util';
 import mongoose from 'mongoose';
-import type { Client, Payment, StudioData, StudioEvent } from '../src/domain/types';
+import type { Client, ManagedAccount, Payment, StudioData, StudioEvent } from '../src/domain/types';
 
 import { createMongoModels } from './mongoModels';
 import { StoreError, type SessionRecord, type StudioStore } from './store';
@@ -10,7 +10,7 @@ type Workspace = Omit<StudioData, 'version' | 'events' | 'clients' | 'homePhoto'
   _id: string;
   revision: number;
 };
-type User = { _id: string; username: string; pin: string; attempts?: number; attemptUntil?: number; profile?: StudioData['profile'] };
+type User = { _id: string; username: string; pin: string; name?: string; role?: ManagedAccount['role']; attempts?: number; attemptUntil?: number; profile?: StudioData['profile'] };
 type EventRecord = Omit<StudioEvent, 'id' | 'payments'> & { _id: string };
 type ClientRecord = Omit<Client, 'id'> & { _id: string };
 type PaymentRecord = Payment & { _id: string; eventId: string };
@@ -33,7 +33,8 @@ function collections(db: mongoose.mongo.Db) {
 export function splitStudioData(data: StudioData) {
   return {
     settings: { profile: data.profile, ...(data.theme === undefined ? {} : { theme: data.theme }),
-      ...(data.customEventTypes === undefined ? {} : { customEventTypes: data.customEventTypes }) },
+      ...(data.customEventTypes === undefined ? {} : { customEventTypes: data.customEventTypes }),
+      ...(data.photoGalleries === undefined ? {} : { photoGalleries: data.photoGalleries }) },
     events: data.events.map(({ id, payments: _payments, ...event }) => ({ _id: id, ...event })),
     clients: data.clients.map(({ id, ...client }) => ({ _id: id, ...client })),
     payments: data.events.flatMap(event => event.payments.map(payment => ({ ...payment, _id: event.id + ':' + payment.id, eventId: event.id }))),
@@ -51,6 +52,7 @@ export function joinStudioData(row: Workspace & {
   }
   return {
     version: 1, profile: row.profile, theme: row.theme, customEventTypes: row.customEventTypes,
+    photoGalleries: row.photoGalleries,
     clients: row.clients.map(({ _id, ...client }) => ({ id: _id, ...client })),
     events: row.events.map(({ _id, ...event }) => ({ id: _id, ...event, payments: byEvent.get(_id) ?? [] })),
   };
@@ -181,6 +183,33 @@ export function createMongoStore(uri: string | undefined, dbName = 'mersal_media
         .select('studioId -_id').lean().exec();
       if (!row || !await auth.findOne({ _id: row.studioId }, { projection: { _id: 1 } })) return null;
       return sharedId;
+    },
+    async findAccountSession(hash, now) {
+      const { Session, auth } = await database();
+      const session = await Session.findOne({ _id: hash, expiresAt: { $gt: new Date(now) } })
+        .select('studioId -_id').lean().exec();
+      if (!session) return null;
+      const user = await auth.findOne({ _id: session.studioId }, { projection: { username: 1, role: 1 } });
+      return user ? { username: user.username, role: user.role === 'admin' ? 'admin' : 'client' } : null;
+    },
+    async listManagedAccounts() {
+      const { auth } = await database();
+      const accounts = await auth.find({}, { projection: { username: 1, name: 1, role: 1, 'profile.name': 1 } })
+        .sort({ username: 1 }).toArray();
+      return accounts.map(account => ({
+        username: account.username, name: account.name ?? account.profile?.name ?? account.username,
+        role: account.role === 'admin' ? 'admin' : 'client',
+      }));
+    },
+    async createManagedAccount(id, account) {
+      const { auth } = await database();
+      try {
+        await auth.insertOne({ _id: id, ...account });
+        return true;
+      } catch (error) {
+        if (error instanceof mongoose.mongo.MongoServerError && error.code === 11000 && error.keyPattern?.username) return false;
+        throw error;
+      }
     },
     async revokeSession(hash) {
       const { Session } = await database();

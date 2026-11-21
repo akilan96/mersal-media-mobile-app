@@ -80,6 +80,8 @@ const userSchema = new Schema({
   _id: { type: String, required: true },
   username: { type: String, required: true, match: /^[a-z0-9_.-]{3,40}$/ },
   pin: { type: String, required: true, select: false, match: /^\d{4}$/ },
+  name: { type: String, maxlength: 100 },
+  role: { type: String, enum: ['admin', 'client'] },
   attempts: Number,
   attemptUntil: Number,
   profile: { type: profileSchema, default: null },
@@ -92,6 +94,12 @@ const workspaceSchema = new Schema({
   profile: { type: profileSchema, default: null },
   theme: { type: String, enum: [...themeNames, 'pancake'] },
   customEventTypes: { type: [String], default: undefined },
+  photoGalleries: { type: [new Schema({
+    id: { type: String, required: true },
+    clientId: { type: String, required: true },
+    driveLink: { type: String, required: true, maxlength: 2048 },
+    createdAt: { type: String, required: true },
+  }, nested)], default: undefined },
 }, collection);
 
 const sharedEventSchema = new Schema({
