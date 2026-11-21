@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Mersal Media - Events</title>
+<!-- Tailwind CSS CDN with forms and container plugins -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Tailwind Custom Configuration -->
+<script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              teal: '#00A896',
+              darkTeal: '#008477',
+              navy: '#13293D',
+              lightTeal: '#E0F4F2',
+              cardBorder: '#E2F1F0',
+              textMuted: '#687b8c',
+              bgLight: '#F5FBFA'
+            }
+          }
+        }
+      }
+    }
+  </script>
+<!-- BEGIN: Custom Styles -->
+<style data-purpose="background-wave">
+    /* Subtle organic waves background effect */
+    .bg-wave-pattern {
+      background-color: #f7fdfd;
+      background-image: 
+        radial-gradient(at 100% 0%, rgba(162, 237, 227, 0.45) 0px, transparent 55%),
+        radial-gradient(at 0% 100%, rgba(182, 240, 233, 0.5) 0px, transparent 60%),
+        radial-gradient(at 100% 85%, rgba(199, 245, 239, 0.4) 0px, transparent 50%);
+    }
+    .hide-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .hide-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+  </style>
+<!-- END: Custom Styles -->
+</head>
+<body class="bg-gray-100 flex justify-center items-center min-h-screen p-0 sm:p-4 select-none font-sans antialiased">
+<!-- Mobile Device Container simulating iOS/Android wrapper -->
+<div class="relative w-full max-w-[430px] h-[932px] max-h-screen bg-wave-pattern overflow-hidden flex flex-col shadow-2xl sm:rounded-[44px] border border-gray-200">
+<!-- BEGIN: SystemStatusBar -->
+<!-- Android / System Status Bar -->
+<header class="w-full pt-3 px-6 pb-2 flex justify-between items-center z-20 shrink-0 text-slate-800" data-purpose="system-status-bar">
+<!-- Left: Clock & App Notifications -->
+<div class="flex items-center space-x-2">
+<span class="text-sm font-semibold tracking-tight">11:30</span>
+<!-- Small Status Circle & Dots -->
+<div class="flex items-center space-x-1 pl-1">
+<svg class="w-3.5 h-3.5 text-gray-700" fill="currentColor" viewbox="0 0 24 24">
+<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"></path>
+<circle cx="12" cy="12" r="3"></circle>
+</svg>
+<span class="text-[10px] font-bold tracking-widest text-gray-600 leading-none">···</span>
+</div>
+</div>
+<!-- Right: Network Speed, Cellular, WiFi, Battery -->
+<div class="flex items-center space-x-2 text-gray-800">
+<div class="text-[10px] font-bold leading-tight flex flex-col items-end pr-0.5">
+<span>32.2</span>
+<span class="-mt-1 text-[8px] text-gray-600">KB/s</span>
+</div>
+<!-- VoLTE / Dual SIM indicator -->
+<svg class="w-3.5 h-3.5" fill="currentColor" viewbox="0 0 24 24">
+<path d="M2 17h2v4H2v-4zm4-4h2v8H6v-8zm4-4h2v12h-2V9zm4-5h2v17h-2V4zm4 8h2v9h-2v-9z"></path>
+</svg>
+<!-- Signal Strength -->
+<svg class="w-3.5 h-3.5" fill="currentColor" viewbox="0 0 24 24">
+<path d="M12 3c-4.97 0-9 4.03-9 9 0 2.12.74 4.07 1.97 5.61L12 22l7.03-4.39C20.26 16.07 21 14.12 21 12c0-4.97-4.03-9-9-9z" opacity="0"></path>
+<path d="M2 22h20L12 2 2 22z"></path>
+</svg>
+<!-- WiFi -->
+<svg class="w-3.5 h-3.5" fill="currentColor" viewbox="0 0 24 24">
+<path d="M12 4C7.31 4 3.07 5.9 0 8.98L12 21 24 8.98A16.88 16.88 0 0 0 12 4z"></path>
+</svg>
+<!-- Battery with '73' -->
+<div class="flex items-center">
+<div class="relative border-2 border-gray-800 rounded px-1 py-0.5 flex items-center justify-center min-w-[24px] h-[13px] text-[8px] font-black leading-none">
+            73
+          </div>
+<div class="w-0.5 h-1.5 bg-gray-800 rounded-r-sm"></div>
+</div>
+</div>
+</header>
+<!-- END: SystemStatusBar -->
+<!-- BEGIN: BrandHeader -->
+<!-- Brand Logo, Title and Notification Area -->
+<section class="px-5 pt-2 pb-3 flex justify-between items-center z-10 shrink-0" data-purpose="brand-header">
+<div class="flex items-center space-x-3">
+<!-- Logo Camera Icon -->
+<div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-cyan-400 via-teal-500 to-teal-700 flex items-center justify-center shadow-md shadow-teal-500/20 text-white p-2.5">
+<svg class="w-full h-full" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24">
+<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+<circle cx="12" cy="13" r="4"></circle>
+</svg>
+</div>
+<!-- Brand Text & Subheading -->
+<div class="flex flex-col">
+<div class="text-[17px] font-extrabold tracking-tight flex items-center space-x-1">
+<span class="text-slate-900 tracking-wide">MERSAL</span>
+<span class="text-teal-600 font-black">MEDIA</span>
+</div>
+<span class="text-[10px] font-bold text-slate-500 tracking-[0.25em] uppercase">
+            — EVENTS —
+          </span>
+</div>
+</div>
+<!-- Notification Bell with Counter Badge -->
+<button aria-label="Notifications" class="relative p-2.5 text-slate-700 hover:text-teal-600 transition-colors" type="button">
+<svg class="w-7 h-7" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" viewbox="0 0 24 24">
+<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+<path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+</svg>
+<!-- Badge '2' -->
+<span class="absolute top-1.5 right-1.5 bg-teal-500 text-white text-[10px] font-black rounded-full h-4 w-4 flex items-center justify-center border-2 border-white shadow-sm">
+          2
+        </span>
+</button>
+</section>
+<!-- END: BrandHeader -->
+<!-- BEGIN: FilterChips -->
+<!-- Sort Filters: Date, Name, Amount -->
+<nav aria-label="Sort options" class="px-5 py-2.5 flex items-center space-x-3 shrink-0 z-10" data-purpose="sort-filters">
+<span class="text-[14px] font-medium text-slate-600 mr-0.5">Sort by:</span>
+<!-- Active Chip: Date -->
+<button class="bg-teal-600 text-white font-semibold text-[13px] px-5 py-1.5 rounded-full shadow-md shadow-teal-600/30 transition-all hover:bg-teal-700" type="button">
+        Date
+      </button>
+<!-- Inactive Chip: Name -->
+<button class="bg-white/95 text-slate-700 font-medium text-[13px] px-4 py-1.5 rounded-full border border-sky-100 shadow-sm hover:border-teal-400 transition-all" type="button">
+        Name
+      </button>
+<!-- Inactive Chip: Amount -->
+<button class="bg-white/95 text-slate-700 font-medium text-[13px] px-4 py-1.5 rounded-full border border-sky-100 shadow-sm hover:border-teal-400 transition-all" type="button">
+        Amount
+      </button>
+</nav>
+<!-- END: FilterChips -->
+<!-- BEGIN: EventList -->
+<!-- Scrollable Events List -->
+<main class="flex-1 overflow-y-auto px-5 py-2 space-y-3.5 hide-scrollbar relative z-10" data-purpose="event-cards-container">
+<!-- Event 1: Product photography -->
+<article class="bg-white/95 backdrop-blur-sm rounded-2xl p-3.5 flex items-center justify-between border border-teal-50/80 shadow-[0_4px_16px_rgba(0,168,150,0.06)] hover:shadow-md transition-shadow">
+<div class="flex items-center space-x-3.5">
+<!-- Date Badge -->
+<div class="w-14 h-14 bg-teal-50/80 rounded-xl flex flex-col items-center justify-center border border-teal-100/60 shrink-0">
+<span class="text-xl font-black text-slate-800 leading-none">14</span>
+<span class="text-[11px] font-bold text-teal-600 tracking-wider mt-0.5">NOV</span>
+</div>
+<!-- Details -->
+<div class="flex flex-col">
+<h2 class="text-[15px] font-bold text-slate-900 leading-snug">Product photography</h2>
+<p class="text-[12px] font-medium text-slate-500 mt-0.5">Studio Floor B · 11:00 am</p>
+</div>
+</div>
+<!-- Actions: Trash & Chevron -->
+<div class="flex items-center space-x-3 text-slate-400 pr-1">
+<button aria-label="Delete Event" class="p-1 hover:text-red-500 transition-colors" type="button">
+<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24">
+<polyline points="3 6 5 6 21 6"></polyline>
+<path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+</svg>
+</button>
+<svg class="w-4 h-4 text-teal-600 stroke-[2.5]" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" viewbox="0 0 24 24">
+<polyline points="9 18 15 12 9 6"></polyline>
+</svg>
+</div>
+</article>
+<!-- Event 2: Graduation portraits -->
+<article class="bg-white/95 backdrop-blur-sm rounded-2xl p-3.5 flex items-center justify-between border border-teal-50/80 shadow-[0_4px_16px_rgba(0,168,150,0.06)] hover:shadow-md transition-shadow">
+<div class="flex items-center space-x-3.5">
+<div class="w-14 h-14 bg-teal-50/80 rounded-xl flex flex-col items-center justify-center border border-teal-100/60 shrink-0">
+<span class="text-xl font-black text-slate-800 leading-none">16</span>
+<span class="text-[11px] font-bold text-teal-600 tracking-wider mt-0.5">NOV</span>
+</div>
+<div class="flex flex-col">
+<h2 class="text-[15px] font-bold text-slate-900 leading-snug">Graduation portraits</h2>
+<p class="text-[12px] font-medium text-slate-500 mt-0.5">Studio Floor A · 10:00 am</p>
+</div>
+</div>
+<div class="flex items-center space-x-3 text-slate-400 pr-1">
+<button aria-label="Delete Event" class="p-1 hover:text-red-500 transition-colors" type="button">
+<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24">
+<polyline points="3 6 5 6 21 6"></polyline>
+<path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+</svg>
+</button>
+<svg class="w-4 h-4 text-teal-600 stroke-[2.5]" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" viewbox="0 0 24 24">
+<polyline points="9 18 15 12 9 6"></polyline>
+</svg>
+</div>
+</article>
+<!-- Event 3: Karthik & Divya – Marriage -->
+<article class="bg-white/95 backdrop-blur-sm rounded-2xl p-3.5 flex items-center justify-between border border-teal-50/80 shadow-[0_4px_16px_rgba(0,168,150,0.06)] hover:shadow-md transition-shadow">
+<div class="flex items-center space-x-3.5">
+<div class="w-14 h-14 bg-teal-50/80 rounded-xl flex flex-col items-center justify-center border border-teal-100/60 shrink-0">
+<span class="text-xl font-black text-slate-800 leading-none">19</span>
+<span class="text-[11px] font-bold text-teal-600 tracking-wider mt-0.5">NOV</span>
+</div>
+<div class="flex flex-col">
+<h2 class="text-[15px] font-bold text-slate-900 leading-snug">Karthik &amp; Divya – Marriage</h2>
+<p class="text-[12px] font-medium text-slate-500 mt-0.5">Sri Lakshmi Mahal, Trichy · 6:00 am</p>
+</div>
+</div>
+<div class="flex items-center space-x-3 text-slate-400 pr-1">
+<button aria-label="Delete Event" class="p-1 hover:text-red-500 transition-colors" type="button">
+<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24">
+<polyline points="3 6 5 6 21 6"></polyline>
+<path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+</svg>
+</button>
+<svg class="w-4 h-4 text-teal-600 stroke-[2.5]" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" viewbox="0 0 24 24">
+<polyline points="9 18 15 12 9 6"></polyline>
+</svg>
+</div>
+</article>
+<!-- Event 4: Family portraits -->
+<article class="bg-white/95 backdrop-blur-sm rounded-2xl p-3.5 flex items-center justify-between border border-teal-50/80 shadow-[0_4px_16px_rgba(0,168,150,0.06)] hover:shadow-md transition-shadow">
+<div class="flex items-center space-x-3.5">
+<div class="w-14 h-14 bg-teal-50/80 rounded-xl flex flex-col items-center justify-center border border-teal-100/60 shrink-0">
+<span class="text-xl font-black text-slate-800 leading-none">20</span>
+<span class="text-[11px] font-bold text-teal-600 tracking-wider mt-0.5">NOV</span>
+</div>
+<div class="flex flex-col">
+<h2 class="text-[15px] font-bold text-slate-900 leading-snug">Family portraits</h2>
+<p class="text-[12px] font-medium text-slate-500 mt-0.5">Besant Nagar · 7:00 am</p>
+</div>
+</div>
+<div class="flex items-center space-x-3 text-slate-400 pr-1">
+<button aria-label="Delete Event" class="p-1 hover:text-red-500 transition-colors" type="button">
+<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24">
+<polyline points="3 6 5 6 21 6"></polyline>
+<path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+</svg>
+</button>
+<svg class="w-4 h-4 text-teal-600 stroke-[2.5]" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" viewbox="0 0 24 24">
+<polyline points="9 18 15 12 9 6"></polyline>
+</svg>
+</div>
+</article>
+<!-- Event 5: Wedding reception -->
+<article class="bg-white/95 backdrop-blur-sm rounded-2xl p-3.5 flex items-center justify-between border border-teal-50/80 shadow-[0_4px_16px_rgba(0,168,150,0.06)] hover:shadow-md transition-shadow">
+<div class="flex items-center space-x-3.5">
+<div class="w-14 h-14 bg-teal-50/80 rounded-xl flex flex-col items-center justify-center border border-teal-100/60 shrink-0">
+<span class="text-xl font-black text-slate-800 leading-none">21</span>
+<span class="text-[11px] font-bold text-teal-600 tracking-wider mt-0.5">NOV</span>
+</div>
+<div class="flex flex-col">
+<h2 class="text-[15px] font-bold text-slate-900 leading-snug">Wedding reception</h2>
+<p class="text-[12px] font-medium text-slate-500 mt-0.5">Adyar · 6:00 pm</p>
+</div>
+</div>
+<div class="flex items-center space-x-3 text-slate-400 pr-1">
+<button aria-label="Delete Event" class="p-1 hover:text-red-500 transition-colors" type="button">
+<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24">
+<polyline points="3 6 5 6 21 6"></polyline>
+<path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+</svg>
+</button>
+<svg class="w-4 h-4 text-teal-600 stroke-[2.5]" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" viewbox="0 0 24 24">
+<polyline points="9 18 15 12 9 6"></polyline>
+</svg>
+</div>
+</article>
+<!-- Event 6: Engagement ceremony -->
+<article class="bg-white/95 backdrop-blur-sm rounded-2xl p-3.5 flex items-center justify-between border border-teal-50/80 shadow-[0_4px_16px_rgba(0,168,150,0.06)] hover:shadow-md transition-shadow">
+<div class="flex items-center space-x-3.5">
+<div class="w-14 h-14 bg-teal-50/80 rounded-xl flex flex-col items-center justify-center border border-teal-100/60 shrink-0">
+<span class="text-xl font-black text-slate-800 leading-none">23</span>
+<span class="text-[11px] font-bold text-teal-600 tracking-wider mt-0.5">NOV</span>
+</div>
+<div class="flex flex-col">
+<h2 class="text-[15px] font-bold text-slate-900 leading-snug">Engagement ceremony</h2>
+<p class="text-[12px] font-medium text-slate-500 mt-0.5">Mylapore · 5:00 pm</p>
+</div>
+</div>
+<div class="flex items-center space-x-3 text-slate-400 pr-1">
+<button aria-label="Delete Event" class="p-1 hover:text-red-500 transition-colors" type="button">
+<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24">
+<polyline points="3 6 5 6 21 6"></polyline>
+<path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+</svg>
+</button>
+<svg class="w-4 h-4 text-teal-600 stroke-[2.5]" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" viewbox="0 0 24 24">
+<polyline points="9 18 15 12 9 6"></polyline>
+</svg>
+</div>
+</article>
+<!-- Event 7: Wedding film -->
+<article class="bg-white/95 backdrop-blur-sm rounded-2xl p-3.5 flex items-center justify-between border border-teal-50/80 shadow-[0_4px_16px_rgba(0,168,150,0.06)] hover:shadow-md transition-shadow">
+<div class="flex items-center space-x-3.5">
+<div class="w-14 h-14 bg-teal-50/80 rounded-xl flex flex-col items-center justify-center border border-teal-100/60 shrink-0">
+<span class="text-xl font-black text-slate-800 leading-none">26</span>
+<span class="text-[11px] font-bold text-teal-600 tracking-wider mt-0.5">NOV</span>
+</div>
+<div class="flex flex-col">
+<h2 class="text-[15px] font-bold text-slate-900 leading-snug">Wedding film</h2>
+<p class="text-[12px] font-medium text-slate-500 mt-0.5">Mahabalipuram · 8:00 am</p>
+</div>
+</div>
+<div class="flex items-center space-x-3 text-slate-400 pr-1">
+<button aria-label="Delete Event" class="p-1 hover:text-red-500 transition-colors" type="button">
+<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24">
+<polyline points="3 6 5 6 21 6"></polyline>
+<path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+</svg>
+</button>
+<svg class="w-4 h-4 text-teal-600 stroke-[2.5]" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" viewbox="0 0 24 24">
+<polyline points="9 18 15 12 9 6"></polyline>
+</svg>
+</div>
+</article>
+<!-- Bottom Padding for FAB visibility -->
+<div class="h-20 w-full"></div>
+</main>
+<!-- END: EventList -->
+<!-- BEGIN: FloatingActionButton -->
+<!-- Floating Pill Action Button: + Create Event -->
+<div class="absolute bottom-[84px] right-5 z-20" data-purpose="floating-action-button">
+<button class="flex items-center space-x-2 bg-gradient-to-r from-teal-500 to-teal-700 text-white font-bold px-6 py-3.5 rounded-full shadow-lg shadow-teal-700/30 hover:shadow-teal-700/50 hover:scale-[1.02] active:scale-[0.98] transition-all" type="button">
+<svg class="w-5 h-5 stroke-[2.5]" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" viewbox="0 0 24 24">
+<line x1="12" x2="12" y1="5" y2="19"></line>
+<line x1="5" x2="19" y1="12" y2="12"></line>
+</svg>
+<span class="text-[15px] tracking-wide">Create Event</span>
+</button>
+</div>
+<!-- END: FloatingActionButton -->
+<!-- BEGIN: BottomNavigation -->
+<!-- Bottom 5-Tab Bar (Home, Events, Photos, Clients, Settings) -->
+<footer class="bg-white/95 backdrop-blur-md border-t border-gray-100 px-3 py-2 flex justify-around items-center z-30 shrink-0 shadow-lg" data-purpose="bottom-navigation-bar">
+<!-- Home Tab -->
+<button class="flex flex-col items-center justify-center flex-1 py-1 text-slate-500 hover:text-teal-600 transition-colors" type="button">
+<svg class="w-6 h-6 stroke-[1.8]" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" viewbox="0 0 24 24">
+<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+<polyline points="9 22 9 12 15 12 15 22"></polyline>
+</svg>
+<span class="text-[11px] font-semibold mt-1">Home</span>
+</button>
+<!-- Events Tab (Active) -->
+<button class="flex flex-col items-center justify-center flex-1 py-1 text-teal-600 relative" type="button">
+<svg class="w-6 h-6 stroke-[2]" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" viewbox="0 0 24 24">
+<rect height="18" rx="2" ry="2" width="18" x="3" y="4"></rect>
+<line x1="16" x2="16" y1="2" y2="6"></line>
+<line x1="8" x2="8" y1="2" y2="6"></line>
+<line x1="3" x2="21" y1="10" y2="10"></line>
+</svg>
+<span class="text-[11px] font-bold mt-1">Events</span>
+<!-- Active indicator bar below label -->
+<span class="w-8 h-[3px] bg-teal-600 rounded-full mt-0.5"></span>
+</button>
+<!-- Photos Tab -->
+<button class="flex flex-col items-center justify-center flex-1 py-1 text-slate-500 hover:text-teal-600 transition-colors" type="button">
+<svg class="w-6 h-6 stroke-[1.8]" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" viewbox="0 0 24 24">
+<rect height="18" rx="2" ry="2" width="18" x="3" y="3"></rect>
+<circle cx="8.5" cy="8.5" r="1.5"></circle>
+<polyline points="21 15 16 10 5 21"></polyline>
+</svg>
+<span class="text-[11px] font-semibold mt-1">Photos</span>
+</button>
+<!-- Clients Tab -->
+<button class="flex flex-col items-center justify-center flex-1 py-1 text-slate-500 hover:text-teal-600 transition-colors" type="button">
+<svg class="w-6 h-6 stroke-[1.8]" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" viewbox="0 0 24 24">
+<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+<circle cx="9" cy="7" r="4"></circle>
+<path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+<path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+</svg>
+<span class="text-[11px] font-semibold mt-1">Clients</span>
+</button>
+<!-- Settings Tab -->
+<button class="flex flex-col items-center justify-center flex-1 py-1 text-slate-500 hover:text-teal-600 transition-colors" type="button">
+<svg class="w-6 h-6 stroke-[1.8]" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" viewbox="0 0 24 24">
+<circle cx="12" cy="12" r="3"></circle>
+<path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+</svg>
+<span class="text-[11px] font-semibold mt-1">Settings</span>
+</button>
+</footer>
+<!-- END: BottomNavigation -->
+</div>
+</body></html>

@@ -1,0 +1,44 @@
+{
+  "expo": {
+    "name": "Mersal Media",
+    "slug": "mersal-media",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "scheme": "mersalmedia",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.mersalmedia.studio"
+    },
+    "android": {
+      "package": "com.mersalmedia.studio",
+      "softwareKeyboardLayoutMode": "resize"
+    },
+    "plugins": [
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#F3FAFB",
+          "image": "./assets/design/brand-logo.png",
+          "imageWidth": 88,
+          "resizeMode": "contain"
+        }
+      ],
+      "expo-secure-store",
+      "expo-sharing",
+      "@react-native-community/datetimepicker",
+      "expo-font",
+      "expo-asset",
+      [
+        "expo-notifications",
+        {
+          "enableRemoteNotifications": false
+        }
+      ],
+      "expo-audio"
+    ],
+    "web": {
+      "name": "Mersal Media"
+    }
+  }
+}

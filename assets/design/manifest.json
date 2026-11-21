@@ -1,0 +1,128 @@
+{
+  "schemaVersion": 1,
+  "method": "Lossless rectangular crops of the user's original supplied PNG references",
+  "excluded": "OS status bars, headings, text inputs, buttons, cards, and bottom navigation",
+  "note": "Original HTML image URLs resolve to complete lower-resolution screen compositions; see remote-source-manifest.json. They are not used as native screen implementations.",
+  "artifacts": [
+    {
+      "file": "welcome-hero.png",
+      "screen": "welcome_splash",
+      "sourceReference": "chatgpt_image_nov_18_2026_11_53_04_pm_2.png/screen.png",
+      "sourceDimensions": [
+        900,
+        1600
+      ],
+      "cropBounds": [
+        0,
+        280,
+        900,
+        975
+      ],
+      "cropBoundsConvention": "left, top, right-exclusive, bottom-exclusive",
+      "outputDimensions": [
+        900,
+        695
+      ],
+      "purpose": "Camera, plant, clapperboard, and printed photographs only",
+      "sourceSha256": "1f4e4b85b9af5d5ce9b49329f35ade6cdd2b390640cce21769f7192dee78f29f",
+      "outputSha256": "8ce7e0dca66e853ef1ad6364f4e9a40a4ea6224ff9cddab6fdad9d57a1c94748",
+      "bytes": 759388
+    },
+    {
+      "file": "login-hero.png",
+      "screen": "login",
+      "sourceReference": "chatgpt_image_nov_18_2026_11_53_05_pm_3.png/screen.png",
+      "sourceDimensions": [
+        900,
+        1600
+      ],
+      "cropBounds": [
+        0,
+        50,
+        900,
+        410
+      ],
+      "cropBoundsConvention": "left, top, right-exclusive, bottom-exclusive",
+      "outputDimensions": [
+        900,
+        360
+      ],
+      "purpose": "Camera and prints above the separate native brand and login form",
+      "sourceSha256": "d0f7996b1d3a7da0ff802d10371670bdf90838b33de6140c1666f396cbf9c707",
+      "outputSha256": "4365876523fe2fb1e934512f53903f1d71c80b45c2ee87e343ef9723699fc0a6",
+      "bytes": 354606
+    },
+    {
+      "file": "photos-hero.png",
+      "screen": "photos_coming_soon",
+      "sourceReference": "chatgpt_image_nov_18_2026_11_53_11_pm_9.png/screen.png",
+      "sourceDimensions": [
+        900,
+        1600
+      ],
+      "cropBounds": [
+        0,
+        70,
+        900,
+        575
+      ],
+      "cropBoundsConvention": "left, top, right-exclusive, bottom-exclusive",
+      "outputDimensions": [
+        900,
+        505
+      ],
+      "purpose": "Camera and photographs above the native Coming Soon content",
+      "sourceSha256": "eabf3115d697832e27ebdc5074239c61c4ea244518e90323aa35fc1f99e72e23",
+      "outputSha256": "973cd696459336736774381108135997bf7a7fbb6fb46d9311467ecb7f421c60",
+      "bytes": 437809
+    },
+    {
+      "file": "dashboard-camera.png",
+      "screen": "home_dashboard",
+      "sourceReference": "chatgpt_image_nov_18_2026_11_53_04_pm_1.png/screen.png",
+      "sourceDimensions": [
+        900,
+        1600
+      ],
+      "cropBounds": [
+        470,
+        155,
+        900,
+        430
+      ],
+      "cropBoundsConvention": "left, top, right-exclusive, bottom-exclusive",
+      "outputDimensions": [
+        430,
+        275
+      ],
+      "purpose": "Right-aligned camera vignette, excluding greeting and notification UI",
+      "sourceSha256": "df9c6460314de4644589a8a2c0fb89d323e6fe4719cd9168fcd0d266ca0312e3",
+      "outputSha256": "3dcf1f932d5808ff2ad293355e18d7462e76501459830c125fd55a0c7275c5e9",
+      "bytes": 172668
+    },
+    {
+      "file": "brand-logo.png",
+      "screen": "welcome_splash",
+      "sourceReference": "chatgpt_image_nov_18_2026_11_53_04_pm_2.png/screen.png",
+      "sourceDimensions": [
+        900,
+        1600
+      ],
+      "cropBounds": [
+        50,
+        130,
+        172,
+        248
+      ],
+      "cropBoundsConvention": "left, top, right-exclusive, bottom-exclusive",
+      "outputDimensions": [
+        122,
+        118
+      ],
+      "purpose": "Original camera logo tile, excluding brand text",
+      "sourceSha256": "1f4e4b85b9af5d5ce9b49329f35ade6cdd2b390640cce21769f7192dee78f29f",
+      "outputSha256": "2b5124416c601f4ee563a760342dca5839e1623c25b1b4da2d90b54674aa2a6d",
+      "bytes": 17459
+    }
+  ]
+}

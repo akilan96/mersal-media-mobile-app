@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport"/>
+<title>Login - Mersal Media Photography</title>
+<!-- Tailwind CSS CDN -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Tailwind Configuration -->
+<script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              teal: '#00A896',
+              cyan: '#02C39A',
+              darkteal: '#005C53',
+              deepblue: '#0F172A',
+              lightcyan: '#E6FAF8',
+              border: '#BFE9E5'
+            }
+          },
+          fontFamily: {
+            sans: ['-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', 'sans-serif']
+          }
+        }
+      }
+    }
+  </script>
+<!-- BEGIN: Custom Styles -->
+<style data-purpose="custom-styling">
+    /* Subtle background and smooth font rendering */
+    body {
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+    
+    /* Subtle soft shadow matching original */
+    .soft-shadow {
+      box-shadow: 0 4px 20px -2px rgba(0, 168, 150, 0.08);
+    }
+  </style>
+<!-- END: Custom Styles -->
+</head>
+<body class="bg-[#F8FDFA] min-h-screen flex justify-center items-center text-slate-800 antialiased selection:bg-teal-100">
+<!-- BEGIN: MobileDeviceFrame -->
+<div class="relative w-full max-w-[430px] min-h-screen bg-white flex flex-col justify-between overflow-hidden shadow-2xl">
+<!-- Top & Bottom Wavy Background Vectors -->
+<div class="absolute inset-0 pointer-events-none z-0 overflow-hidden">
+<!-- Top Decorative Teal Waves -->
+<svg class="absolute -top-10 left-0 w-full opacity-60" fill="none" viewbox="0 0 430 240" xmlns="http://www.w3.org/2000/svg">
+<path d="M-40 60 C80 140, 220 0, 470 70 L470 0 L-40 0 Z" fill="url(#topWaveGrad)" opacity="0.45"></path>
+<path d="M-60 120 C100 160, 260 40, 500 110 L500 0 L-60 0 Z" fill="url(#topWaveGrad2)" opacity="0.3"></path>
+<defs>
+<lineargradient id="topWaveGrad" x1="0%" x2="100%" y1="0%" y2="100%">
+<stop offset="0%" stop-color="#4CE0D2"></stop>
+<stop offset="100%" stop-color="#A5F3FC"></stop>
+</lineargradient>
+<lineargradient id="topWaveGrad2" x1="0%" x2="100%" y1="0%" y2="100%">
+<stop offset="0%" stop-color="#2DD4BF"></stop>
+<stop offset="100%" stop-color="#CCFBF1"></stop>
+</lineargradient>
+</defs>
+</svg>
+<!-- Bottom Decorative Teal Waves -->
+<svg class="absolute -bottom-6 left-0 w-full opacity-70" fill="none" viewbox="0 0 430 180" xmlns="http://www.w3.org/2000/svg">
+<path d="M-30 80 C110 30, 280 120, 460 60 L460 220 L-30 220 Z" fill="url(#bottomWaveGrad)" opacity="0.35"></path>
+<path d="M-40 110 C140 60, 290 140, 480 90 L480 220 L-40 220 Z" fill="url(#bottomWaveGrad2)" opacity="0.4"></path>
+<defs>
+<lineargradient id="bottomWaveGrad" x1="0%" x2="100%" y1="0%" y2="100%">
+<stop offset="0%" stop-color="#A7F3D0"></stop>
+<stop offset="100%" stop-color="#2DD4BF"></stop>
+</lineargradient>
+<lineargradient id="bottomWaveGrad2" x1="0%" x2="100%" y1="0%" y2="100%">
+<stop offset="0%" stop-color="#5EEAD4"></stop>
+<stop offset="100%" stop-color="#14B8A6"></stop>
+</lineargradient>
+</defs>
+</svg>
+</div>
+<!-- BEGIN: AndroidStatusBar -->
+<header class="relative z-20 flex justify-between items-center px-6 pt-3 pb-1 text-slate-900 font-semibold text-xs tracking-tight">
+<div class="flex items-center space-x-1.5" data-purpose="status-bar-left">
+<span class="text-sm font-bold tracking-normal">11:29</span>
+<span class="inline-block w-1.5 h-1.5 rounded-full bg-slate-800"></span>
+<span class="text-[10px] tracking-tight text-slate-600">···</span>
+</div>
+<div class="flex items-center space-x-2 text-[11px]" data-purpose="status-bar-right">
+<div class="flex items-center space-x-0.5 leading-none">
+<span class="font-mono text-[9px]">1.13</span>
+<span class="text-[8px] flex flex-col -space-y-1"><span>KB</span><span>/s</span></span>
+</div>
+<!-- VoWiFi / Network icon -->
+<svg class="w-3.5 h-3.5" fill="currentColor" viewbox="0 0 24 24">
+<path d="M12 4C7.31 4 3.07 5.9 0 8.98L12 21 24 8.98C20.93 5.9 16.69 4 12 4z"></path>
+</svg>
+<!-- Cellular Signal -->
+<svg class="w-3.5 h-3.5" fill="currentColor" viewbox="0 0 24 24">
+<path d="M2 22h20V2z"></path>
+</svg>
+<!-- Battery Icon with 73% -->
+<div class="flex items-center space-x-0.5">
+<span class="text-[10px] font-bold">73</span>
+<svg class="w-4 h-4" fill="currentColor" viewbox="0 0 24 24">
+<path d="M15.67 4H14V2h-4v2H8.33C7.6 4 7 4.6 7 5.33v15.33C7 21.4 7.6 22 8.33 22h7.33c.74 0 1.34-.6 1.34-1.33V5.33C17 4.6 16.4 4 15.67 4z"></path>
+</svg>
+</div>
+</div>
+</header>
+<!-- END: AndroidStatusBar -->
+<!-- BEGIN: MainContent -->
+<main class="relative z-10 flex-1 flex flex-col justify-center px-7 py-4">
+<!-- Studio Header Imagery / Visual Anchor -->
+<div class="w-full flex justify-center mb-5" data-purpose="brand-imagery">
+<div class="relative w-full max-w-[320px] h-36 flex items-center justify-center">
+<img alt="Mersal Media Photography Studio Equipment and Showcase" class="w-full h-full object-contain filter drop-shadow-sm pointer-events-none" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDIJdoqoVdEOGZEapkimcClpQ8bTxIELEOcvDrLlcLG-JnECr8D7gQ6Mb7M3_DE8uiTMomsaBgdVcVqcGD04zsXQRxpO-gQDZLzj9r9-3vdFUo8BR8wyA9dFe0DyzUI0SNtw1DJc085dRII4j-kNEDY1B36RWKTyQ34fCJOAg3CGXMRXcG5zhP8OvVEyiiOZ6DIRW6C_dVpdQV1aLQemtZoisw8XFWBsTXXl82tQas5NEQ3wpERTaNY"/>
+</div>
+</div>
+<!-- BEGIN: BrandLogoHeader -->
+<div class="flex flex-col items-center justify-center mb-6 text-center" data-purpose="brand-logo">
+<div class="relative px-6 py-2">
+<!-- Frame Corner Brackets -->
+<div class="absolute top-0 left-0 w-3.5 h-3.5 border-t-2 border-l-2 border-[#00B4A0] rounded-tl-sm"></div>
+<div class="absolute top-0 right-0 w-3.5 h-3.5 border-t-2 border-r-2 border-[#00B4A0] rounded-tr-sm"></div>
+<div class="absolute bottom-0 left-0 w-3.5 h-3.5 border-b-2 border-l-2 border-[#00B4A0] rounded-bl-sm"></div>
+<div class="absolute bottom-0 right-0 w-3.5 h-3.5 border-b-2 border-r-2 border-[#00B4A0] rounded-br-sm"></div>
+<!-- Camera Vector Outline -->
+<svg class="w-20 h-10 mx-auto text-[#0F172A] mb-1" fill="none" stroke="currentColor" viewbox="0 0 90 45">
+<path d="M26 15 L33 15 L36 8 L54 8 L57 15 L64 15 C69.5 15 74 19.5 74 25 C74 35 69.5 39 64 39 L26 39 C20.5 39 16 35 16 25 C16 19.5 20.5 15 26 15 Z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"></path>
+<circle cx="45" cy="27" r="8" stroke="#00B4A0" stroke-width="2.5"></circle>
+</svg>
+<!-- Mersal Media Typography -->
+<h1 class="text-xl tracking-tight font-black uppercase text-[#0B1E36]">
+            MERSAL <span class="text-[#00B4A0]">MEDIA</span>
+</h1>
+<!-- Subtitle / Tagline -->
+<p class="text-[9px] tracking-[0.28em] font-semibold text-slate-500 uppercase mt-0.5">
+            — PHOTOGRAPHY —
+          </p>
+</div>
+</div>
+<!-- END: BrandLogoHeader -->
+<!-- Welcome Heading & Subtitle -->
+<div class="text-center mb-6">
+<h2 class="text-[28px] font-extrabold text-[#0F172A] tracking-tight">Welcome Back</h2>
+<p class="text-slate-500 text-sm mt-1 font-normal">Sign in to manage your studio events.</p>
+</div>
+<!-- BEGIN: LoginForm -->
+<form action="#" class="space-y-4" method="POST" onsubmit="event.preventDefault();">
+<!-- Username Field -->
+<div data-purpose="username-input-group">
+<label class="block text-xs font-semibold text-slate-700 mb-1.5 ml-0.5" for="username">Username</label>
+<div class="relative">
+<input class="w-full px-4 py-3 rounded-2xl bg-[#F4FBFA] border border-[#BCE8E4] text-[#0F172A] font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-[#00B4A0] focus:border-transparent transition-all shadow-inner" id="username" name="username" placeholder="Enter your username" type="text" value="studio"/>
+</div>
+</div>
+<!-- 4-digit PIN Field -->
+<div class="pt-1" data-purpose="pin-input-group">
+<div class="flex justify-between items-center mb-1.5 px-0.5">
+<label class="text-xs font-semibold text-slate-700">4-digit PIN</label>
+<!-- Show/Hide PIN Eye Icon -->
+<button aria-label="Toggle PIN Visibility" class="text-slate-600 hover:text-teal-600 focus:outline-none" type="button">
+<svg class="w-4 h-4" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+<path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+</button>
+</div>
+<!-- PIN Boxes Grid -->
+<div class="grid grid-cols-4 gap-3.5">
+<!-- Box 1 -->
+<div class="h-12 rounded-2xl bg-[#F4FBFA] border border-[#BCE8E4] flex items-center justify-center shadow-inner">
+<span class="w-2.5 h-2.5 rounded-full bg-[#0F172A] block"></span>
+</div>
+<!-- Box 2 -->
+<div class="h-12 rounded-2xl bg-[#F4FBFA] border border-[#BCE8E4] flex items-center justify-center shadow-inner">
+<span class="w-2.5 h-2.5 rounded-full bg-[#0F172A] block"></span>
+</div>
+<!-- Box 3 -->
+<div class="h-12 rounded-2xl bg-[#F4FBFA] border border-[#BCE8E4] flex items-center justify-center shadow-inner">
+<span class="w-2.5 h-2.5 rounded-full bg-[#0F172A] block"></span>
+</div>
+<!-- Box 4 -->
+<div class="h-12 rounded-2xl bg-[#F4FBFA] border border-[#BCE8E4] flex items-center justify-center shadow-inner">
+<span class="w-2.5 h-2.5 rounded-full bg-[#0F172A] block"></span>
+</div>
+</div>
+<!-- Forgot PIN Link -->
+<div class="flex justify-end mt-2">
+<a class="text-xs font-semibold text-[#00A896] hover:text-[#008273] transition-colors" href="#">
+              Forgot PIN?
+            </a>
+</div>
+</div>
+<!-- Login Submit Button -->
+<div class="pt-2">
+<button class="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-[#00C2A0] to-[#018F82] text-white font-bold text-base shadow-md hover:brightness-105 active:scale-[0.99] transition-all flex items-center justify-center space-x-2" type="submit">
+<span>Login</span>
+<svg class="w-4 h-4 ml-1 stroke-[2.5]" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M14 5l7 7m0 0l-7 7m7-7H3" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</button>
+</div>
+</form>
+<!-- END: LoginForm -->
+<!-- Preview Credential Hint -->
+<footer class="mt-4 text-center">
+<p class="text-xs text-slate-500 font-medium tracking-wide">
+          Preview account <span class="mx-1">·</span> studio / PIN 1234
+        </p>
+</footer>
+</main>
+<!-- END: MainContent -->
+<!-- Extra Spacing Container for Mobile Safe Area -->
+<div class="relative z-10 pb-6"></div>
+</div>
+<!-- END: MobileDeviceFrame -->
+</body></html>

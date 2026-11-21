@@ -1,0 +1,23 @@
+[
+  {
+    "screen": "welcome_splash",
+    "file": "welcome-hero.png",
+    "source": "https://lh3.googleusercontent.com/aida-public/AB6AXuD7u4BSpD1zk0XskysVbbmB564GQZwEdmPPrNyhl20GQaD4wQeAtZNvhtboRY9VQwaAiYCrEPNNiGcLdJfhPA6jDL_VD9NM8i7x_gQRGru9oKzTDNnQ7s6lw4-25HHPPnYIUgY1uUx9jvSl3RQXcx5AyzK2KmGjht1T_trKKeIjLOWsv9D1JiXsUWMa95Gjp9lYUIVh8z9Bhkghfefb6D-WYKjHRPcCecKvZB8YN0oshhw1_95Mv37G",
+    "bytes": 189228,
+    "contentType": "image/png"
+  },
+  {
+    "screen": "login",
+    "file": "login-hero.png",
+    "source": "https://lh3.googleusercontent.com/aida-public/AB6AXuDIJdoqoVdEOGZEapkimcClpQ8bTxIELEOcvDrLlcLG-JnECr8D7gQ6Mb7M3_DE8uiTMomsaBgdVcVqcGD04zsXQRxpO-gQDZLzj9r9-3vdFUo8BR8wyA9dFe0DyzUI0SNtw1DJc085dRII4j-kNEDY1B36RWKTyQ34fCJOAg3CGXMRXcG5zhP8OvVEyiiOZ6DIRW6C_dVpdQV1aLQemtZoisw8XFWBsTXXl82tQas5NEQ3wpERTaNY",
+    "bytes": 159697,
+    "contentType": "image/png"
+  },
+  {
+    "screen": "photos_coming_soon",
+    "file": "photos-hero.png",
+    "source": "https://lh3.googleusercontent.com/aida-public/AB6AXuDfkozPbYPDccHWYX-5cqFa9Dlk-RXzkf6alkEhX89227gLNW99I0pvLRQj4XnLfxqxQ1kI_1_wYGerhq4SX4k5mqnqEJHupikA0-FHMuDspx7doOz54DfE6d0VI381E2nks7GoaWkk_HWIJbJZaAfZkSubQv7mR1Us3-QXCWjoxLsbOY0tKqlTqSwB9VC9mfv8DWLWNLWewRLlVdiZkSEbulYIwjiPPcD70s0P8_8ba_mD7TQIH2lk",
+    "bytes": 171195,
+    "contentType": "image/png"
+  }
+]

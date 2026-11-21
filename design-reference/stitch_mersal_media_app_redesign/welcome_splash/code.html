@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport"/>
+<title>Mersal Media - Welcome</title>
+<!-- Tailwind CSS CDN with plugins -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Custom Font Import -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              teal: '#00b4a0',
+              emerald: '#00c389',
+              dark: '#0f172a',
+              muted: '#64748b'
+            }
+          }
+        }
+      }
+    }
+  </script>
+<!-- BEGIN: Custom Styling -->
+<style data-purpose="base-layout">
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      -webkit-font-smoothing: antialiased;
+      background-color: #f1f5f9;
+    }
+    /* Mobile screen container simulation */
+    .mobile-frame {
+      max-width: 430px;
+      min-height: 100vh;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15);
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      background-color: #ffffff;
+    }
+  </style>
+<style data-purpose="wave-backgrounds">
+    /* Subtle decorative wave curves in the background */
+    .wave-bg-top {
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 100%;
+      height: 480px;
+      background: radial-gradient(circle at 100% 20%, rgba(45, 212, 191, 0.22) 0%, rgba(20, 184, 166, 0.08) 45%, transparent 70%);
+      pointer-events: none;
+      z-index: 1;
+    }
+    .wave-bg-bottom {
+      position: absolute;
+      bottom: -40px;
+      left: 0;
+      width: 100%;
+      height: 140px;
+      background: radial-gradient(ellipse at 50% 100%, rgba(45, 212, 191, 0.25) 0%, rgba(20, 184, 166, 0.05) 60%, transparent 80%);
+      pointer-events: none;
+      z-index: 1;
+    }
+  </style>
+<!-- END: Custom Styling -->
+</head>
+<body class="flex justify-center items-center min-h-screen">
+<!-- BEGIN: Mobile App Container -->
+<div class="mobile-frame w-full mx-auto justify-between" data-purpose="app-splash-screen">
+<!-- Background Gradient Accents -->
+<div aria-hidden="true" class="wave-bg-top"></div>
+<div aria-hidden="true" class="wave-bg-bottom"></div>
+<!-- BEGIN: TopBarAndContent -->
+<div class="relative z-10 flex flex-col flex-1">
+<!-- BEGIN: Android StatusBar -->
+<header class="w-full pt-3 px-6 pb-2 flex items-center justify-between text-neutral-800" data-purpose="status-bar">
+<!-- Clock and Notifications -->
+<div class="flex items-center space-x-1.5">
+<span class="text-[13px] font-bold tracking-tight">11:32</span>
+<span class="text-[11px] font-semibold text-neutral-600">@</span>
+<span class="text-[10px] tracking-widest text-neutral-500 font-bold">···</span>
+</div>
+<!-- Connection and Battery Status Indicators -->
+<div class="flex items-center space-x-2">
+<!-- Network Speed indicator -->
+<div class="flex flex-col text-[8px] font-bold leading-none text-right text-neutral-700">
+<span>1.40</span>
+<span>MB/s</span>
+</div>
+<!-- VoLTE Icon -->
+<svg class="w-3.5 h-3.5 text-neutral-700" fill="currentColor" viewbox="0 0 24 24">
+<path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"></path>
+</svg>
+<!-- Cellular Signal -->
+<div class="flex items-end space-x-0.5 h-3">
+<span class="w-0.5 h-1 bg-neutral-800 rounded-full"></span>
+<span class="w-0.5 h-1.5 bg-neutral-800 rounded-full"></span>
+<span class="w-0.5 h-2 bg-neutral-800 rounded-full"></span>
+<span class="w-0.5 h-3 bg-neutral-800 rounded-full"></span>
+</div>
+<!-- Wi-Fi Icon -->
+<svg class="w-3.5 h-3.5 text-neutral-800" fill="currentColor" viewbox="0 0 24 24">
+<path d="M12 4C7.31 4 3.07 5.9 0 8.98L12 21 24 8.98A16.88 16.88 0 0 0 12 4zm0 3.5c3.55 0 6.8 1.34 9.25 3.54L12 19.34 2.75 11.04C5.2 8.84 8.45 7.5 12 7.5z"></path>
+</svg>
+<!-- Battery Level Pill -->
+<div class="flex items-center space-x-0.5 border border-neutral-700 rounded-sm px-1 py-0.2">
+<span class="text-[9px] font-bold tracking-tighter">72</span>
+</div>
+</div>
+</header>
+<!-- END: Android StatusBar -->
+<!-- BEGIN: Brand Header -->
+<section class="px-6 pt-3 pb-2 flex items-center space-x-3.5" data-purpose="brand-header">
+<!-- Logo Icon Container -->
+<div class="relative w-12 h-12 rounded-2xl bg-gradient-to-br from-teal-400 via-teal-500 to-emerald-600 flex items-center justify-center shadow-md shadow-teal-500/20">
+<!-- White Camera Glyph -->
+<svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24">
+<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"></path>
+<circle cx="12" cy="13" r="3"></circle>
+</svg>
+</div>
+<!-- Typography Branding -->
+<div class="flex flex-col">
+<div class="flex items-baseline space-x-1">
+<h1 class="text-xl font-extrabold tracking-tight text-slate-800">MERSAL</h1>
+<span class="text-xl font-extrabold tracking-tight text-teal-500">MEDIA</span>
+</div>
+<p class="text-[9px] font-semibold tracking-[0.25em] text-slate-500 uppercase mt-0.5">
+            — Photography —
+          </p>
+</div>
+</section>
+<!-- END: Brand Header -->
+<!-- BEGIN: Hero Showcase Section -->
+<section class="relative w-full flex-1 flex items-center justify-center px-4" data-purpose="hero-artwork">
+<!-- Hero Photography Imagery -->
+<div class="w-full relative flex justify-center items-center py-2">
+<img alt="Photography DSLR Camera with Event Photo Prints and Cinematic Lighting" class="w-full object-contain max-h-[390px] drop-shadow-sm select-none pointer-events-none" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD7u4BSpD1zk0XskysVbbmB564GQZwEdmPPrNyhl20GQaD4wQeAtZNvhtboRY9VQwaAiYCrEPNNiGcLdJfhPA6jDL_VD9NM8i7x_gQRGru9oKzTDNnQ7s6lw4-25HHPPnYIUgY1uUx9jvSl3RQXcx5AyzK2KmGjht1T_trKKeIjLOWsv9D1JiXsUWMa95Gjp9lYUIVh8z9Bhkghfefb6D-WYKjHRPcCecKvZB8YN0oshhw1_95Mv37G"/>
+</div>
+</section>
+<!-- END: Hero Showcase Section -->
+</div>
+<!-- END: TopBarAndContent -->
+<!-- BEGIN: Bottom Action Area -->
+<footer class="relative z-10 px-6 pb-8 pt-2 flex flex-col space-y-6" data-purpose="call-to-action-panel">
+<!-- Headline & Subtitle Block -->
+<div class="space-y-3">
+<!-- Tagline with vertical teal accent indicator -->
+<div class="flex items-start space-x-3">
+<span aria-hidden="true" class="w-1.5 h-8 bg-teal-500 rounded-full mt-1 flex-shrink-0"></span>
+<h2 class="text-[28px] leading-tight font-extrabold tracking-tight text-slate-900">
+            Capture. Manage. Deliver.
+          </h2>
+</div>
+<!-- Descriptive Subtext -->
+<p class="text-[14.5px] leading-relaxed font-normal text-slate-600 pl-4.5 pr-2">
+          A smart platform for photography events — from booking to final delivery.
+        </p>
+</div>
+<!-- Action Button -->
+<div class="pt-2">
+<a class="w-full h-14 bg-gradient-to-r from-teal-600 via-teal-500 to-emerald-400 hover:from-teal-700 hover:to-emerald-500 active:scale-[0.99] transition-all duration-200 rounded-full flex items-center justify-center space-x-2.5 text-white font-bold text-lg shadow-lg shadow-teal-500/30" data-purpose="get-started-button" href="#get-started" role="button">
+<span>Get Started</span>
+<!-- Arrow Right Icon -->
+<svg class="w-5 h-5 stroke-[2.5]" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" viewbox="0 0 24 24">
+<line x1="5" x2="19" y1="12" y2="12"></line>
+<polyline points="12 5 19 12 12 19"></polyline>
+</svg>
+</a>
+</div>
+</footer>
+<!-- END: Bottom Action Area -->
+</div>
+<!-- END: Mobile App Container -->
+</body></html>

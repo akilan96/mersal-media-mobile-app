@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>MERSAL MEDIA - Photos Coming Soon</title>
+<!-- Tailwind CSS v3 CDN -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              teal: '#00a896',
+              mint: '#02c39a',
+              softTeal: '#e0f7f5',
+              darkNavy: '#0f1d38',
+              muted: '#627282',
+            }
+          },
+          fontFamily: {
+            sans: ['-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+<!-- BEGIN: Custom Styles -->
+<style data-purpose="base-layout">
+    body {
+      background-color: #f1f5f9;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    .mobile-frame {
+      width: 100%;
+      max-width: 420px;
+      min-height: 880px;
+      height: 100vh;
+      max-height: 920px;
+      background-color: #ffffff;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+  </style>
+<style data-purpose="wave-decorations">
+    /* Subtle background aesthetic wave curves */
+    .hero-wave-bg {
+      background: radial-gradient(circle at 100% 15%, rgba(67, 217, 192, 0.28) 0%, rgba(255, 255, 255, 0) 65%),
+                  radial-gradient(circle at 0% 35%, rgba(67, 217, 192, 0.2) 0%, rgba(255, 255, 255, 0) 60%),
+                  radial-gradient(circle at 50% 88%, rgba(67, 217, 192, 0.22) 0%, rgba(255, 255, 255, 0) 70%);
+    }
+  </style>
+<!-- END: Custom Styles -->
+</head>
+<body>
+<!-- BEGIN: MobileContainer -->
+<main class="mobile-frame select-none" data-purpose="mobile-screen-container">
+<!-- BEGIN: StatusBar -->
+<!-- Android-style system status bar -->
+<header class="w-full pt-2.5 px-6 flex justify-between items-center z-30 text-gray-900 font-semibold text-xs tracking-tight" data-purpose="status-bar">
+<!-- Left side: Time and Notification dots -->
+<div class="flex items-center gap-1.5">
+<span class="text-sm font-bold tracking-normal">11:30</span>
+<svg class="w-3.5 h-3.5 text-gray-700 ml-0.5" fill="none" stroke="currentColor" stroke-width="2.5" viewbox="0 0 24 24">
+<circle cx="12" cy="12" r="9"></circle>
+<circle cx="12" cy="12" fill="currentColor" r="3"></circle>
+</svg>
+<span class="text-gray-500 font-bold text-xs">···</span>
+</div>
+<!-- Right side: Connection Speed & Battery & Icons -->
+<div class="flex items-center gap-1.5 text-[11px]">
+<div class="flex flex-col items-end leading-none text-[9px] font-bold mr-0.5">
+<span>36.8</span>
+<span class="text-[8px] font-normal">KB/s</span>
+</div>
+<!-- VoLTE / Mute / Signal icons -->
+<svg class="w-3.5 h-3.5" fill="currentColor" viewbox="0 0 24 24">
+<path d="M12 4v16l-5-5H3V9h4l5-5zm7.5 8a5.5 5.5 0 00-1.6-3.9l-1.4 1.4A3.5 3.5 0 0118 12a3.5 3.5 0 01-1.5 2.5l1.4 1.4A5.5 5.5 0 0019.5 12z"></path>
+<path d="M2.7 2.7l18.6 18.6-1.4 1.4L1.3 4.1z"></path>
+</svg>
+<!-- Cellular Signal -->
+<svg class="w-3.5 h-3.5" fill="currentColor" viewbox="0 0 24 24">
+<path d="M2 20h20L2 4v16z"></path>
+</svg>
+<!-- Battery Pill with 73% -->
+<div class="flex items-center bg-gray-900 text-white rounded-full px-1.5 py-0.5 ml-0.5 text-[10px] font-bold tracking-tight">
+<span>73</span>
+</div>
+</div>
+</header>
+<!-- END: StatusBar -->
+<!-- BEGIN: MainContentArea -->
+<!-- Scrollable/Flowable Content Area -->
+<div class="flex-1 flex flex-col items-center justify-between pb-24 overflow-y-auto relative hero-wave-bg" data-purpose="scrollable-content">
+<!-- BEGIN: HeroVisual -->
+<!-- Visual imagery composed of the DSLR Camera & Photos illustration -->
+<section class="w-full relative flex flex-col items-center pt-2" data-purpose="hero-photography-visual">
+<div class="w-full relative px-2">
+<!-- Crop/Display top visual area using provided snapshot -->
+<div class="w-full overflow-hidden flex justify-center" style="max-height: 290px;">
+<img alt="Photography Setup with Camera and Printed Photos" class="w-full max-w-[420px] object-cover object-top -mt-8" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDfkozPbYPDccHWYX-5cqFa9Dlk-RXzkf6alkEhX89227gLNW99I0pvLRQj4XnLfxqxQ1kI_1_wYGerhq4SX4k5mqnqEJHupikA0-FHMuDspx7doOz54DfE6d0VI381E2nks7GoaWkk_HWIJbJZaAfZkSubQv7mR1Us3-QXCWjoxLsbOY0tKqlTqSwB9VC9mfv8DWLWNLWewRLlVdiZkSEbulYIwjiPPcD70s0P8_8ba_mD7TQIH2lk" style="filter: drop-shadow(0 14px 20px rgba(0, 168, 150, 0.08));"/>
+</div>
+</div>
+<!-- Center floating Film Reel / Clapperboard rounded icon button -->
+<div class="-mt-8 z-10" data-purpose="icon-badge-film">
+<div class="w-16 h-16 rounded-2xl bg-gradient-to-b from-[#e7faf7] to-[#d3f4ef] border border-white shadow-md shadow-teal-500/15 flex items-center justify-center">
+<!-- Clapperboard / Video Frame Icon -->
+<svg class="w-8 h-8 text-[#009b86]" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24">
+<rect height="16" rx="3" width="20" x="2" y="4"></rect>
+<path d="M2 9h20"></path>
+<path d="m6 4 2 5"></path>
+<path d="m11 4 2 5"></path>
+<path d="m16 4 2 5"></path>
+<polygon fill="currentColor" points="10 12 15 15 10 18" stroke="none"></polygon>
+</svg>
+</div>
+</div>
+</section>
+<!-- END: HeroVisual -->
+<!-- BEGIN: TextAndActionSection -->
+<section class="w-full px-6 flex flex-col items-center text-center mt-3" data-purpose="announcement-content">
+<!-- Coming Soon Pill -->
+<div class="inline-flex items-center justify-center px-4 py-1.5 rounded-full bg-[#dff7f2] text-[#00a896] text-xs font-black tracking-wider uppercase mb-3.5 shadow-sm">
+          Coming Soon
+        </div>
+<!-- Headline -->
+<h1 class="text-[26px] sm:text-[28px] font-extrabold text-[#0e1d3e] leading-[1.2] max-w-[320px] mb-3.5 tracking-tight">
+          Something Beautiful Is Coming Soon
+        </h1>
+<!-- Subtitle Highlight -->
+<p class="text-[15px] sm:text-[16px] font-bold text-[#00a896] leading-snug max-w-[340px] mb-3">
+          We’re creating a better way to manage your photography experience.
+        </p>
+<!-- Descriptive Copy -->
+<p class="text-[13px] text-gray-500 font-normal leading-relaxed max-w-[320px] mb-6">
+          From capturing precious moments to organizing unforgettable memories, exciting new features are on their way.
+        </p>
+<!-- Pagination Dots -->
+<nav aria-label="Feature slides pagination" class="flex items-center gap-1.5" data-purpose="carousel-pagination">
+<!-- Dot 1 -->
+<span class="w-2 h-2 rounded-full bg-[#b8eae2] inline-block"></span>
+<!-- Dot 2: Active elongated pill -->
+<span class="w-7 h-2 rounded-full bg-[#00b49f] inline-block shadow-sm"></span>
+<!-- Dot 3 -->
+<span class="w-2 h-2 rounded-full bg-[#c2eee6] inline-block"></span>
+</nav>
+</section>
+<!-- END: TextAndActionSection -->
+</div>
+<!-- END: MainContentArea -->
+<!-- BEGIN: BottomNavigation -->
+<!-- Fixed Bottom App Navigation Bar -->
+<nav class="absolute bottom-3 left-4 right-4 bg-white/95 backdrop-blur-md rounded-3xl py-2 px-3 shadow-[0_8px_30px_rgb(0,0,0,0.08)] border border-gray-100 flex items-center justify-around z-40" data-purpose="bottom-navigation-bar">
+<!-- Nav Item: Home -->
+<a class="flex flex-col items-center gap-0.5 text-gray-500 hover:text-gray-900 transition-colors w-14 py-1" data-purpose="nav-item" href="#home">
+<svg class="w-5 h-5 stroke-[1.8]" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" viewbox="0 0 24 24">
+<path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+<polyline points="9 22 9 12 15 12 15 22"></polyline>
+</svg>
+<span class="text-[11px] font-semibold tracking-tight">Home</span>
+</a>
+<!-- Nav Item: Events -->
+<a class="flex flex-col items-center gap-0.5 text-gray-500 hover:text-gray-900 transition-colors w-14 py-1" data-purpose="nav-item" href="#events">
+<svg class="w-5 h-5 stroke-[1.8]" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" viewbox="0 0 24 24">
+<rect height="18" rx="2" ry="2" width="18" x="3" y="4"></rect>
+<line x1="16" x2="16" y1="2" y2="6"></line>
+<line x1="8" x2="8" y1="2" y2="6"></line>
+<line x1="3" x2="21" y1="10" y2="10"></line>
+</svg>
+<span class="text-[11px] font-semibold tracking-tight">Events</span>
+</a>
+<!-- Nav Item: Photos (Active Pill Highlight) -->
+<a class="flex flex-col items-center justify-center bg-[#00a896] text-white rounded-2xl px-4 py-1.5 shadow-md shadow-teal-600/30 transition-transform active:scale-95" data-purpose="active-nav-item" href="#photos">
+<svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24">
+<rect height="18" rx="2" ry="2" width="18" x="3" y="3"></rect>
+<circle cx="8.5" cy="8.5" fill="currentColor" r="1.5"></circle>
+<polyline points="21 15 16 10 5 21"></polyline>
+</svg>
+<span class="text-[11px] font-bold tracking-tight">Photos</span>
+</a>
+<!-- Nav Item: Clients -->
+<a class="flex flex-col items-center gap-0.5 text-gray-500 hover:text-gray-900 transition-colors w-14 py-1" data-purpose="nav-item" href="#clients">
+<svg class="w-5 h-5 stroke-[1.8]" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" viewbox="0 0 24 24">
+<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+<circle cx="9" cy="7" r="4"></circle>
+<path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>
+<path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+</svg>
+<span class="text-[11px] font-semibold tracking-tight">Clients</span>
+</a>
+<!-- Nav Item: Settings -->
+<a class="flex flex-col items-center gap-0.5 text-gray-500 hover:text-gray-900 transition-colors w-14 py-1" data-purpose="nav-item" href="#settings">
+<svg class="w-5 h-5 stroke-[1.8]" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" viewbox="0 0 24 24">
+<circle cx="12" cy="12" r="3"></circle>
+<path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+</svg>
+<span class="text-[11px] font-semibold tracking-tight">Settings</span>
+</a>
+</nav>
+<!-- END: BottomNavigation -->
+</main>
+<!-- END: MobileContainer -->
+</body></html>
