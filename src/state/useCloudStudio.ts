@@ -1,14 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { File } from 'expo-file-system';
 import { apiRequest, ApiRequestError, cloudApiUrl } from '../services/cloudApi';
 import { emptyStudio } from '../services/repository';
 import { assertStudioData } from '../domain/validation';
 import type { StudioContext } from './StudioProvider';
-import type { AccountRole, ManagedAccount, StudioEvent } from '../domain/types';
+import type { AccountRole, ClientGalleryList, ClientPaymentSummary, DrivePhotoPage, ManagedAccount, StudioEvent, ThemeName } from '../domain/types';
+import { settingsThemes } from '../theme';
 
 const sessionKey = 'mersal.cloud.session.v1';
+const themeKeys = { client: 'mersal.client.theme.v1', staff: 'mersal.staff.theme.v1' } as const;
+type DeviceThemes = Partial<Record<keyof typeof themeKeys, ThemeName>>;
 type Session = { token: string; expiresAt: string };
 const sessionStorage = Platform.OS !== 'web';
 
@@ -42,6 +46,8 @@ export function useCloudStudio(): StudioContext {
   const [data, setData] = useState(emptyStudio);
   const [authenticated, setAuthenticated] = useState(false);
   const [role, setRole] = useState<AccountRole>();
+  const [accountName, setAccountName] = useState<string>();
+  const [deviceThemes, setDeviceThemes] = useState<DeviceThemes>({});
   const [loading, setLoading] = useState(true);
   const [storageError, setStorageError] = useState<string | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
@@ -50,12 +56,28 @@ export function useCloudStudio(): StudioContext {
   const latest = useRef(emptyStudio);
   const queue = useRef<Promise<unknown>>(Promise.resolve());
   const signingIn = useRef(false);
+  const themeScope = role === 'client' ? 'client' : 'staff';
+
+  useEffect(() => {
+    let active = true;
+    void AsyncStorage.multiGet([themeKeys.client, themeKeys.staff]).then(entries => {
+      const values = new Map(entries);
+      if (!active) return;
+      setDeviceThemes(current => ({
+        client: settingsThemes.find(option => option === values.get(themeKeys.client)),
+        staff: settingsThemes.find(option => option === values.get(themeKeys.staff)),
+        ...current,
+      }));
+    }).catch(() => {});
+    return () => { active = false; };
+  }, []);
 
   const clear = useCallback(async () => {
     session.current = null;
     latest.current = emptyStudio;
     setAuthenticated(false);
     setRole(undefined);
+    setAccountName(undefined);
     setData(emptyStudio);
     setStorageError(null);
     if (sessionStorage) await SecureStore.deleteItemAsync(sessionKey);
@@ -78,6 +100,9 @@ export function useCloudStudio(): StudioContext {
       latest.current = emptyStudio;
       setData(emptyStudio);
       setRole(nextRole);
+      setAccountName(typeof identity.name === 'string' && identity.name.trim()
+        ? identity.name.trim()
+        : typeof identity.username === 'string' ? identity.username : undefined);
       setAuthenticated(true);
       setStorageError(null);
       return;
@@ -197,8 +222,49 @@ export function useCloudStudio(): StudioContext {
     return await response.json() as ManagedAccount[];
   }, []);
 
+  const loadClientPayments = useCallback(async () => {
+    const active = session.current;
+    if (!active) throw new Error('Sign in to continue.');
+    const response = await apiRequest('/client/payment-summary', { token: active.token });
+    return await response.json() as ClientPaymentSummary | null;
+  }, []);
+
+  const loadClientGalleries = useCallback(async () => {
+    const active = session.current;
+    if (!active) throw new Error('Sign in to continue.');
+    const response = await apiRequest('/client/galleries', { token: active.token });
+    return await response.json() as ClientGalleryList;
+  }, []);
+
+  const loadGalleryPhotos = useCallback(async (galleryId: string, pageToken?: string) => {
+    const active = session.current;
+    if (!active) throw new Error('Sign in to continue.');
+    const query = pageToken ? '?pageToken=' + encodeURIComponent(pageToken) : '';
+    const response = await apiRequest('/client/galleries/' + encodeURIComponent(galleryId) + '/photos' + query, { token: active.token });
+    return await response.json() as DrivePhotoPage;
+  }, []);
+
+  function galleryThumbnail(galleryId: string, photoId: string) {
+    const active = session.current;
+    if (!active || !cloudApiUrl) return;
+    return {
+      uri: cloudApiUrl + '/client/galleries/' + encodeURIComponent(galleryId) + '/photos/' + encodeURIComponent(photoId) + '/thumbnail',
+      headers: { Authorization: 'Bearer ' + active.token },
+    };
+  }
+
   return {
-    cloud: true, configured: true, data, authenticated, role, loading, storageError, authError, busy, retryLoad, listAccounts,
+    cloud: true, configured: true, data, authenticated, role, accountName,
+    deviceTheme: authenticated ? deviceThemes[themeScope] : undefined,
+    loading, storageError, authError, busy, retryLoad, listAccounts, loadClientPayments,
+    loadClientGalleries, loadGalleryPhotos, galleryThumbnail,
+    async linkClientAccount(username, clientId) {
+      const active = session.current;
+      if (!active) throw new Error('Sign in to continue.');
+      await apiRequest('/accounts/' + encodeURIComponent(username) + '/client', {
+        method: 'PATCH', token: active.token, json: { clientId },
+      });
+    },
     async createAccount(account) {
       const active = session.current;
       if (!active) throw new Error('Sign in to continue.');
@@ -218,7 +284,14 @@ export function useCloudStudio(): StudioContext {
     },
     async changePin() { throw new Error('Cloud accounts sign in with a password.'); },
     saveProfile({ username: _username, ...profile }) { return write('/profile', 'PATCH', profile); },
-    setTheme(theme) { return write('/settings', 'PATCH', { theme }); },
+    async setTheme(theme) {
+      setDeviceThemes(previous => ({ ...previous, [themeScope]: theme }));
+      try { await AsyncStorage.setItem(themeKeys[themeScope], theme); }
+      catch (error) {
+        setDeviceThemes(previous => ({ ...previous, [themeScope]: deviceThemes[themeScope] }));
+        throw error;
+      }
+    },
     savePhotoGallery(clientId, driveLink) { return write('/photo-galleries', 'POST', { clientId, driveLink }); },
     addEventType(name) { return write('/event-types', 'POST', { name }); },
     async setHomePhoto(uri) {

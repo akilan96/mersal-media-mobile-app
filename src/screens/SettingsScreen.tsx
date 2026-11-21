@@ -6,15 +6,16 @@ import Constants from 'expo-constants';
 import { Brand, Button, CameraArt, Card, ErrorMessage, Field, Header, IconButton, Screen } from '../components/ui';
 import { useToast } from '../components/Toast';
 import { defaultEventTypes, type Profile } from '../domain/types';
-import { daisyThemes } from '../daisyThemes';
+import { AppearanceSetting } from '../components/AppearanceSetting';
+import { FloatingCreateButton } from '../components/PagedList';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Crypto from 'expo-crypto';
 import { useStudio } from '../state/StudioProvider';
 import { useStudioNavigation } from '../navigation/useStudioNavigation';
-import { settingsThemes, useStudioTheme, type Palette } from '../theme';
+import { useStudioTheme, type Palette } from '../theme';
 
-const panelTitles = { profile: 'Edit Profile', pin: 'Change PIN', appearance: 'Appearance', photo: 'Home Photo', types: 'Event Types' } as const;
+const panelTitles = { profile: 'Edit Profile', pin: 'Change PIN', photo: 'Home Photo', types: 'Event Types', newType: 'Add Event Type' } as const;
 type Panel = keyof typeof panelTitles | null;
 const failureMessage = (error: unknown) => error instanceof Error ? error.message : 'Something went wrong. Please try again.';
 const blankProfile: Profile = { name: '', studioName: '', username: '', phone: '', email: '' };
@@ -25,8 +26,7 @@ export default function SettingsScreen() {
   const { colors, ui } = useStudioTheme();
   const styles = makeStyles(colors);
  
-  const { cloud, role, data, saveProfile, changePin, lock, setTheme, setHomePhoto, addEventType } = useStudio();
-  const currentTheme = settingsThemes.find(option => option === data.theme) ?? 'light';
+  const { cloud, role, data, saveProfile, changePin, lock, setHomePhoto, addEventType } = useStudio();
   const [settingsBusy, setSettingsBusy] = useState(false);
   const [settingsError, setSettingsError] = useState('');
   const [eventType, setEventType] = useState('');
@@ -160,8 +160,8 @@ export default function SettingsScreen() {
           <Text style={[styles.rowTitle, ui.flex]}>Change PIN</Text>
           <Feather name="chevron-right" size={22} color={colors.primary} />
         </Pressable>)}
+        <View style={styles.appearanceRow}><AppearanceSetting /></View>
         {([
-          { panel: 'appearance', icon: 'sun', value: currentTheme.charAt(0).toUpperCase() + currentTheme.slice(1) },
           { panel: 'photo', icon: 'image', value: data.homePhoto ? 'Custom' : 'Default' },
           { panel: 'types', icon: 'tag', value: String(defaultEventTypes.length + (data.customEventTypes?.length ?? 0)) },
         ] as const).map(item => (
@@ -206,25 +206,11 @@ export default function SettingsScreen() {
           <Text style={styles.rowValue}>{Constants.expoConfig?.version ?? '1.0.0'}</Text>
         </View>
       </Card>
-      <Modal visible={panel !== null} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => { if (!busy && !settingsBusy) setPanel(null); }}>
+      <Modal visible={panel !== null} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => { if (!busy && !settingsBusy) setPanel(panel === 'newType' ? 'types' : null); }}>
         <SafeAreaView style={styles.modal} edges={['top', 'bottom']}>
           <KeyboardAvoidingView style={ui.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-            <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.modalContent}>
-              <Header title={panel ? panelTitles[panel] : undefined} onBack={() => { if (!busy && !settingsBusy) setPanel(null); }} />
-              {panel === 'appearance' && <Card>
-            {settingsThemes.map(theme => (
-              <Pressable key={theme} style={styles.themeOption} accessibilityRole="radio"
-                accessibilityState={{ checked: theme === currentTheme, disabled: settingsBusy }} disabled={settingsBusy}
-                onPress={() => void updateSettings(async () => {
-                  await setTheme(theme);
-                  setPanel(null);
-                })}>
-                <View style={[styles.swatch, { backgroundColor: daisyThemes[theme === 'pancake' ? 'caramellatte' : theme].primary }]} />
-                <Text style={[ui.label, ui.flex]}>{theme.charAt(0).toUpperCase() + theme.slice(1)}</Text>
-                {theme === currentTheme && <Feather name="check" size={18} color={colors.text} />}
-              </Pressable>
-            ))}
-              </Card>}
+            <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={[styles.modalContent, panel === 'types' && styles.withCreateButton]}>
+              <Header title={panel ? panelTitles[panel] : undefined} onBack={() => { if (!busy && !settingsBusy) setPanel(panel === 'newType' ? 'types' : null); }} />
               {panel === 'photo' && <Card style={ui.gap}>
         <Text style={ui.label}>{data.homePhoto ? 'Current Home photo' : 'Default Home photo'}</Text>
         <CameraArt uri={data.homePhoto} size={120} />
@@ -235,9 +221,18 @@ export default function SettingsScreen() {
             await removeHomePhotoFile(data.homePhoto);
           })} />}
               </Card>}
-              {panel === 'types' && <Card style={ui.gap}>
-        <Text style={ui.body}>These options appear in the Event Type picker.</Text>
-        <Text style={ui.small}>{[...defaultEventTypes, ...(data.customEventTypes ?? [])].join(' · ')}</Text>
+              {panel === 'types' && (
+                <Card style={styles.eventTypes}>
+                  {[...defaultEventTypes, ...(data.customEventTypes ?? [])].map(type => (
+                    <View key={type} style={styles.eventTypeRow}>
+                      <View style={styles.eventTypeIcon}><Feather name="tag" size={17} color={colors.primaryDark} /></View>
+                      <Text style={[ui.label, styles.eventTypeLabel]}>{type}</Text>
+                    </View>
+                  ))}
+                </Card>
+              )}
+              {panel === 'newType' && (
+                <Card style={ui.gap}>
         <Field label="New event type" icon="tag" value={eventType} error={eventTypeError}
           onChangeText={value => { setEventType(value); setEventTypeError(''); }} maxLength={60} editable={!settingsBusy} />
         <Button title="Add Event Type" icon="plus" disabled={settingsBusy}
@@ -259,7 +254,8 @@ export default function SettingsScreen() {
               }
             });
           }} />
-              </Card>}
+                </Card>
+              )}
               {!!settingsError && <ErrorMessage message={settingsError} />}
               {(panel === 'profile' || panel === 'pin') && <>
               <Card>
@@ -281,6 +277,7 @@ export default function SettingsScreen() {
               </>}
             </ScrollView>
           </KeyboardAvoidingView>
+          {panel === 'types' && <FloatingCreateButton label="Add event type" onPress={() => openPanel('newType')} />}
         </SafeAreaView>
       </Modal>
     </Screen>
@@ -288,8 +285,12 @@ export default function SettingsScreen() {
 }
 
 const makeStyles = (colors: Palette) => StyleSheet.create({
-  themeOption: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 46, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
-  swatch: { height: 18, width: 18, borderRadius: 9, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
+  eventTypes: { gap: 9 },
+  withCreateButton: { paddingBottom: 84 },
+  eventTypeRow: { minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: colors.border, borderRadius: 14 },
+  eventTypeIcon: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: 11, backgroundColor: colors.mint },
+  eventTypeLabel: { flex: 1, fontSize: 15 },
+  appearanceRow: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
   companyLogo: { width: 56, height: 42, borderRadius: 6 },
   profileCard: { overflow: 'hidden', marginTop: 16, marginBottom: 4 },
   profileGlow: { position: 'absolute', bottom: -65, right: -20, width: 250, height: 130, borderRadius: 100, backgroundColor: colors.mint },

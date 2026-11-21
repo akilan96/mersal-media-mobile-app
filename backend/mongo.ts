@@ -10,7 +10,7 @@ type Workspace = Omit<StudioData, 'version' | 'events' | 'clients' | 'homePhoto'
   _id: string;
   revision: number;
 };
-type User = { _id: string; username: string; pin: string; name?: string; role?: ManagedAccount['role']; attempts?: number; attemptUntil?: number; profile?: StudioData['profile'] };
+type User = { _id: string; username: string; pin: string; name?: string; role?: ManagedAccount['role']; clientId?: string; attempts?: number; attemptUntil?: number; profile?: StudioData['profile'] };
 type EventRecord = Omit<StudioEvent, 'id' | 'payments'> & { _id: string };
 type ClientRecord = Omit<Client, 'id'> & { _id: string };
 type PaymentRecord = Payment & { _id: string; eventId: string };
@@ -189,16 +189,16 @@ export function createMongoStore(uri: string | undefined, dbName = 'mersal_media
       const session = await Session.findOne({ _id: hash, expiresAt: { $gt: new Date(now) } })
         .select('studioId -_id').lean().exec();
       if (!session) return null;
-      const user = await auth.findOne({ _id: session.studioId }, { projection: { username: 1, role: 1 } });
-      return user ? { username: user.username, role: user.role === 'admin' ? 'admin' : 'client' } : null;
+      const user = await auth.findOne({ _id: session.studioId }, { projection: { username: 1, name: 1, role: 1, clientId: 1 } });
+      return user ? { username: user.username, name: user.name, clientId: user.clientId, role: user.role === 'admin' ? 'admin' : 'client' } : null;
     },
     async listManagedAccounts() {
       const { auth } = await database();
-      const accounts = await auth.find({}, { projection: { username: 1, name: 1, role: 1, 'profile.name': 1 } })
+      const accounts = await auth.find({}, { projection: { username: 1, name: 1, role: 1, clientId: 1, 'profile.name': 1 } })
         .sort({ username: 1 }).toArray();
       return accounts.map(account => ({
         username: account.username, name: account.name ?? account.profile?.name ?? account.username,
-        role: account.role === 'admin' ? 'admin' : 'client',
+        role: account.role === 'admin' ? 'admin' : 'client', clientId: account.clientId,
       }));
     },
     async createManagedAccount(id, account) {
@@ -210,6 +210,11 @@ export function createMongoStore(uri: string | undefined, dbName = 'mersal_media
         if (error instanceof mongoose.mongo.MongoServerError && error.code === 11000 && error.keyPattern?.username) return false;
         throw error;
       }
+    },
+    async linkClientAccount(username, clientId) {
+      const { auth } = await database();
+      const result = await auth.updateOne({ username, role: { $ne: 'admin' } }, { $set: { clientId } });
+      return result.matchedCount === 1;
     },
     async revokeSession(hash) {
       const { Session } = await database();

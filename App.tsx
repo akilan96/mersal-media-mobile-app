@@ -22,8 +22,9 @@ class AppErrorBoundary extends React.Component<{ children: React.ReactNode }, { 
   render() { return this.state.error ? <Screen><Brand /><Card><Text style={{ fontFamily: 'InterBold' }}>Your studio couldn’t open</Text><Text style={{ marginTop: 12 }}>Your saved records have not been erased. Restart the app or try again.</Text></Card><ErrorMessage message={this.state.error} /><Button title="Try Again" onPress={() => this.setState({ error: null })} /></Screen> : this.props.children; }
 }
 function ThemedStudio() {
-  const { data } = useStudio();
-  const theme = settingsThemes.find(option => option === data.theme) ?? 'light';
+  const { data, role, deviceTheme } = useStudio();
+  const selectedTheme = deviceTheme ?? (role === 'client' ? 'light' : data.theme);
+  const theme = settingsThemes.find(option => option === selectedTheme) ?? 'light';
   return <ThemeContext.Provider value={theme}><StatusBar style={theme !== 'pancake' && daisyThemes[theme].dark ? 'light' : 'dark'} /><ToastProvider><StudioApp /></ToastProvider></ThemeContext.Provider>;
 }
 function StudioApp() {

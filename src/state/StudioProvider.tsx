@@ -2,7 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useRef, useSt
 import { defaultEventTypes, type ThemeName } from '../domain/types';
 import { AppState } from 'react-native';
 import * as Crypto from 'expo-crypto';
-import type { AccountRole, ClientInput, EventInput, EventStatus, ManagedAccount, Profile, StudioData, StudioEvent } from '../domain/types';
+import type { AccountRole, ClientGalleryList, ClientInput, ClientPaymentSummary, DrivePhotoPage, EventInput, EventStatus, ManagedAccount, Profile, StudioData, StudioEvent } from '../domain/types';
 import { addPhotoGallery, isClientPhone, phoneDigits, putEvent, removeClient, validateClient, validateProfile } from '../domain/validation';
 import { emptyStudio, studioRepository } from '../services/repository';
 import { createCredential, hasCredential, removeCredential, verifyPin } from '../services/credentials';
@@ -11,8 +11,15 @@ import { useCloudStudio } from './useCloudStudio';
 export interface StudioContext {
   cloud: boolean;
   role?: AccountRole;
+  accountName?: string;
+  deviceTheme?: ThemeName;
   listAccounts?(): Promise<ManagedAccount[]>;
   createAccount?(account: ManagedAccount & { pin: string }): Promise<ManagedAccount>;
+  linkClientAccount?(username: string, clientId: string): Promise<void>;
+  loadClientPayments?(): Promise<ClientPaymentSummary | null>;
+  loadClientGalleries?(): Promise<ClientGalleryList>;
+  loadGalleryPhotos?(galleryId: string, pageToken?: string): Promise<DrivePhotoPage>;
+  galleryThumbnail?(galleryId: string, photoId: string): { uri: string; headers: Record<string, string> } | undefined;
   data: StudioData; configured: boolean; authenticated: boolean; loading: boolean; storageError: string | null;
   authError: string | null; busy: boolean; retryLoad(): void;
   setup(profile: Profile, pin: string, joinCode?: string): Promise<void>; unlock(username: string, pin: string): Promise<void>;

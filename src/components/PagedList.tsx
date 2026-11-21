@@ -13,7 +13,6 @@ export function PagedList<T extends { id: string }>({ items, scope, renderItem, 
   empty: ReactElement;
   createAction?: { label: string; onPress: () => void };
 }) {
-  const { colors } = useStudioTheme();
   const [page, setPage] = useState({ scope, limit: pageSize });
   const limit = page.scope === scope ? page.limit : pageSize;
   const hasMore = limit < items.length;
@@ -54,19 +53,22 @@ export function PagedList<T extends { id: string }>({ items, scope, renderItem, 
         onScroll={hasMore ? onScroll : undefined}
         scrollEventThrottle={32}
       />
-      {createAction && (
-        <View pointerEvents="box-none" style={styles.actionPosition}>
-          <Pressable accessibilityRole="button" accessibilityLabel={createAction.label} onPress={createAction.onPress}
-            style={({ pressed }) => [styles.createButton, { backgroundColor: colors.primary }, pressed && { opacity: 0.8 }]}>
-            <View pointerEvents="none" accessible={false} style={styles.plus}>
-              <View style={[styles.plusHorizontal, { backgroundColor: colors.onPrimary }]} />
-              <View style={[styles.plusVertical, { backgroundColor: colors.onPrimary }]} />
-            </View>
-          </Pressable>
-        </View>
-      )}
+      {createAction && <FloatingCreateButton {...createAction} />}
     </Screen>
   );
+}
+
+export function FloatingCreateButton({ label, onPress }: { label: string; onPress: () => void }) {
+  const { colors } = useStudioTheme();
+  return <View pointerEvents="box-none" style={styles.actionPosition}>
+    <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress}
+      style={({ pressed }) => [styles.createButton, { backgroundColor: colors.primary }, pressed && { opacity: 0.8 }]}>
+      <View pointerEvents="none" accessible={false} style={styles.plus}>
+        <View style={[styles.plusHorizontal, { backgroundColor: colors.onPrimary }]} />
+        <View style={[styles.plusVertical, { backgroundColor: colors.onPrimary }]} />
+      </View>
+    </Pressable>
+  </View>;
 }
 
 function Separator() { return <View style={styles.separator} />; }

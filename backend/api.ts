@@ -4,8 +4,9 @@ import { rateLimit } from 'express-rate-limit';
 import { z } from 'zod';
 import { defaultEventTypes, themeNames, type AccountRole, type StudioData } from '../src/domain/types';
 import { addPhotoGallery, assertStudioData, isClientPhone, isGoogleDriveLink, phoneDigits, putEvent, removeClient } from '../src/domain/validation';
-import { eventSummary, upcomingEvents } from '../src/domain/helpers';
+import { balanceAmount, eventSummary, upcomingEvents } from '../src/domain/helpers';
 import { StoreError, type StudioStore } from './store';
+import type { createDriveReader } from './drive';
 
 class ApiError extends Error {
   constructor(readonly status: number, message: string) { super(message); }
@@ -43,7 +44,9 @@ const createAccount = credentials.extend({ profile: profileFields, joinCode: z.s
 const receipt = z.object({ amount: z.number().positive(), note: z.string().trim().min(1).max(200).default('Payment received') });
 const theme = z.union([z.enum(themeNames), z.literal('pancake')]);
 
-export function createExpressApi(store: StudioStore, app = express(), sharedSignup?: { joinCode?: string; pinMode?: boolean; ownerUsername?: string }) {
+export function createExpressApi(store: StudioStore, app = express(), sharedSignup?: {
+  joinCode?: string; pinMode?: boolean; ownerUsername?: string; drive?: ReturnType<typeof createDriveReader>;
+}) {
   const ownerUsername = sharedSignup?.ownerUsername?.trim().toLowerCase();
   app.disable('x-powered-by');
   app.use((_req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
@@ -127,9 +130,11 @@ export function createExpressApi(store: StudioStore, app = express(), sharedSign
       const account = await store.findAccountSession?.(hash, Date.now());
       if (!account) throw new ApiError(401, 'Session expired or invalid.');
       const role: AccountRole = account.username === ownerUsername ? 'owner' : account.role;
-      res.locals.account = { username: account.username, role };
+      res.locals.account = { username: account.username, name: account.name, role };
+      res.locals.clientId = account.clientId;
       res.locals.studioId = 'shared';
-      if (role === 'client' && !(req.method === 'GET' && req.path === '/auth/me')
+      const galleryRead = /^\/client\/galleries(?:\/[^/]+\/photos(?:\/[^/]+\/thumbnail)?)?$/.test(req.path);
+      if (role === 'client' && !(req.method === 'GET' && (galleryRead || ['/auth/me', '/client/payment-summary'].includes(req.path)))
         && !(req.method === 'POST' && req.path === '/auth/logout')) {
         throw new ApiError(403, 'This account can only access the client area.');
       }
@@ -177,6 +182,53 @@ export function createExpressApi(store: StudioStore, app = express(), sharedSign
     res.sendStatus(204);
   });
   api.get('/auth/me', (_req, res) => res.json(res.locals.account));
+  async function clientGalleries(res: Response) {
+    if (res.locals.account.role !== 'client') throw new ApiError(403, 'This endpoint is for client accounts.');
+    const clientId = res.locals.clientId;
+    if (!clientId) return [];
+    const { data } = await load(res);
+    return (data.photoGalleries ?? []).filter(gallery => gallery.clientId === clientId);
+  }
+
+  async function clientGallery(res: Response, id: string) {
+    const gallery = (await clientGalleries(res)).find(item => item.id === id);
+    if (!gallery) throw new ApiError(404, 'Gallery not found.');
+    return gallery;
+  }
+
+  api.get('/client/galleries', async (_req, res) => {
+    const galleries = (await clientGalleries(res)).map(({ id, driveLink, createdAt }) => ({ id, driveLink, createdAt }));
+    res.json({ galleries, previewsEnabled: Boolean(sharedSignup?.drive) });
+  });
+  api.get('/client/galleries/:id/photos', async (req, res) => {
+    const gallery = await clientGallery(res, req.params.id);
+    const pageToken = z.string().max(4096).optional().parse(req.query.pageToken);
+    const drive = sharedSignup?.drive;
+    if (!drive) throw new ApiError(503, 'In-app Drive previews are not configured.');
+    res.json(await drive.list(gallery.driveLink, pageToken));
+  });
+  api.get('/client/galleries/:id/photos/:fileId/thumbnail', async (req, res) => {
+    const gallery = await clientGallery(res, req.params.id);
+    const drive = sharedSignup?.drive;
+    if (!drive) throw new ApiError(503, 'In-app Drive previews are not configured.');
+    const photo = await drive.thumbnail(gallery.driveLink, req.params.fileId);
+    res.set('X-Content-Type-Options', 'nosniff').type(photo.contentType).send(photo.bytes);
+  });
+  api.get('/client/payment-summary', async (_req, res) => {
+    if (res.locals.account.role !== 'client') throw new ApiError(403, 'This endpoint is for client accounts.');
+    const clientId = res.locals.clientId;
+    if (!clientId) { res.json(null); return; }
+    const { data } = await load(res);
+    if (!data.clients.some(client => client.id === clientId)) { res.json(null); return; }
+    let total = 0;
+    let pending = 0;
+    for (const event of data.events) {
+      if (event.clientId !== clientId || event.status === 'Cancelled') continue;
+      total += Math.round(event.totalAmount * 100);
+      pending += Math.round(balanceAmount(event) * 100);
+    }
+    res.json({ total: total / 100, pending: pending / 100 });
+  });
   api.use('/accounts', (_req, res, next) => {
     if (res.locals.account.role !== 'owner') throw new ApiError(403, 'Only the studio owner can manage accounts.');
     next();
@@ -193,6 +245,17 @@ export function createExpressApi(store: StudioStore, app = express(), sharedSign
       throw new ApiError(409, 'Username is already in use.');
     }
     res.status(201).json({ username, name, role });
+  });
+  api.patch('/accounts/:username/client', async (req, res) => {
+    if (!store.linkClientAccount) throw new ApiError(503, 'Account management is unavailable.');
+    const accountUsername = username.parse(req.params.username);
+    const { clientId } = z.object({ clientId: z.uuid() }).parse(req.body);
+    const { data } = await load(res);
+    if (!data.clients.some(client => client.id === clientId)) throw new ApiError(422, 'Choose an existing client.');
+    if (accountUsername === ownerUsername || !await store.linkClientAccount(accountUsername, clientId)) {
+      throw new ApiError(404, 'Client account not found.');
+    }
+    res.json({ clientId });
   });
   api.get('/studio', async (_req, res) => {
     const { data, revision } = await load(res);

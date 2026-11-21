@@ -82,6 +82,7 @@ const userSchema = new Schema({
   pin: { type: String, required: true, select: false, match: /^\d{4}$/ },
   name: { type: String, maxlength: 100 },
   role: { type: String, enum: ['admin', 'client'] },
+  clientId: String,
   attempts: Number,
   attemptUntil: Number,
   profile: { type: profileSchema, default: null },

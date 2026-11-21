@@ -1,7 +1,8 @@
 import { daisyThemes } from '../daisyThemes';
 export type EventStatus = 'Scheduled' | 'Editing' | 'Completed' | 'Cancelled';
 export type AccountRole = 'owner' | 'admin' | 'client';
-export type ManagedAccount = { username: string; name: string; role: Exclude<AccountRole, 'owner'> };
+export type ManagedAccount = { username: string; name: string; role: Exclude<AccountRole, 'owner'>; clientId?: string };
+export type ClientPaymentSummary = { total: number; pending: number };
 export type EventType = string;
 export const defaultEventTypes = ['Marriage', 'Reception', 'Birthday Party', 'Corporate Event', 'Baby Shower', 'Portraits', 'Other'];
 export type ThemeName = keyof typeof daisyThemes | 'pancake';
@@ -15,6 +16,10 @@ export interface StudioEvent {
 export interface Client { id: string; name: string; phone: string; email: string; notes: string; createdAt: string }
 export interface Profile { name: string; studioName: string; username: string; phone: string; email: string }
 export interface PhotoGallery { id: string; clientId: string; driveLink: string; createdAt: string }
+export type ClientGallery = Pick<PhotoGallery, 'id' | 'driveLink' | 'createdAt'>;
+export type ClientGalleryList = { galleries: ClientGallery[]; previewsEnabled: boolean };
+export type DrivePhoto = { id: string; name: string; hasThumbnail: boolean };
+export type DrivePhotoPage = { photos: DrivePhoto[]; nextPageToken?: string };
 export interface StudioData { version: 1; profile: Profile | null; events: StudioEvent[]; clients: Client[]; theme?: ThemeName; homePhoto?: string; customEventTypes?: string[]; photoGalleries?: PhotoGallery[] }
 export type EventInput = Omit<StudioEvent, 'id' | 'createdAt'>;
 export type ClientInput = Omit<Client, 'id' | 'createdAt'>;

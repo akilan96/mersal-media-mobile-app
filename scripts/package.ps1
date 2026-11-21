@@ -8,7 +8,7 @@ $archivePath = [System.IO.Path]::GetFullPath($OutputPath)
 if (-not $archivePath.StartsWith($projectRoot + [System.IO.Path]::DirectorySeparatorChar, [System.StringComparison]::OrdinalIgnoreCase)) { throw 'The archive output must stay inside the project directory.' }
 if ([System.IO.Path]::GetExtension($archivePath) -ne '.zip') { throw 'The archive output must end in .zip.' }
 [System.IO.Directory]::CreateDirectory([System.IO.Path]::GetDirectoryName($archivePath)) | Out-Null
-$topFiles = @('App.tsx', 'index.ts', 'app.json', 'package.json', 'package-lock.json', 'tsconfig.json', '.gitignore', 'README.md', 'INTEGRATION.md', 'DESIGN_AUDIT.md', 'VALIDATION.md', 'backend/api.ts', 'backend/server.ts', 'backend/README.md', 'backend/store.ts', 'backend/sqlite.ts', 'backend/atlas-server.ts', 'backend/mongo.ts', 'backend/mongoModels.ts', 'server.ts', 'vercel.json', '.env.example')
+$topFiles = @('App.tsx', 'index.ts', 'app.json', 'package.json', 'package-lock.json', 'tsconfig.json', '.gitignore', 'README.md', 'INTEGRATION.md', 'DESIGN_AUDIT.md', 'VALIDATION.md', 'backend/api.ts', 'backend/server.ts', 'backend/README.md', 'backend/store.ts', 'backend/sqlite.ts', 'backend/atlas-server.ts', 'backend/mongo.ts', 'backend/drive.ts', 'backend/mongoModels.ts', 'server.ts', 'vercel.json', '.env.example')
 $sourceDirectories = @('src', 'assets', 'scripts', 'tests', 'design-reference')
 $fileList = [System.Collections.Generic.List[string]]::new()
 foreach ($name in $topFiles) {

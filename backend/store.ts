@@ -29,9 +29,10 @@ export interface StudioStore {
   findCredentials(username: string): Result<({ id: string } & StudioCredential) | null>;
   createSession(session: SessionRecord): Result<void>;
   findSession(hash: string, now: number): Result<string | null>;
-  findAccountSession?(hash: string, now: number): Result<{ username: string; role: ManagedAccount['role'] } | null>;
+  findAccountSession?(hash: string, now: number): Result<(Omit<ManagedAccount, 'name'> & { name?: string }) | null>;
   listManagedAccounts?(): Result<ManagedAccount[]>;
   createManagedAccount?(id: string, account: ManagedAccount & { pin: string }): Result<boolean>;
+  linkClientAccount?(username: string, clientId: string): Result<boolean>;
   revokeSession(hash: string): Result<void>;
   load(studioId: string): Result<{ data: StudioData; revision: number } | null>;
   save(studioId: string, revision: number, data: StudioData, previous: StudioData): Result<boolean>;

@@ -5,13 +5,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { useStudioNavigation } from '../navigation/useStudioNavigation';
 import { CameraArt, Card, EmptyState, Header, Screen, SectionTitle } from '../components/ui';
-import { LinearGradient } from 'expo-linear-gradient';
-import Svg, { Defs, LinearGradient as SvgGradient, Path, Stop } from 'react-native-svg';
-import { formatTime, upcomingEvents } from '../domain/helpers';
+import { MetricCard } from '../components/MetricCard';
+import { formatTime, greeting, upcomingEvents } from '../domain/helpers';
 import { useStudio } from '../state/StudioProvider';
 import { useStudioTheme, type Palette } from '../theme';
 import type { StudioEvent } from '../domain/types';
-function greeting() { const hour = new Date().getHours(); return hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : hour < 21 ? 'Good evening' : 'Good night'; }
 const sampleNoticeKey = '@mersal/sample-notifications-viewed';
 const sampleNotices = [
   { title: 'Welcome to Mersal Media', message: 'Sample notification · Your studio dashboard is ready.' },
@@ -104,58 +102,6 @@ export default function HomeScreen() {
     <Text style={[ui.small, { textAlign: 'center', paddingTop: 8 }]}>Your studio. A little more organized.</Text>
   </Screen>;
 }
-const metricColors = {
-  mint: { surface: ['#FFFFFF', '#EDFFF7'], tile: ['#2ED4A9', '#128A70'], wave: '#11C997' },
-  blue: { surface: ['#FFFFFF', '#EAF8FF'], tile: ['#55CBFA', '#168AC7'], wave: '#20A8EE' },
-  gold: { surface: ['#FFFFFF', '#FFF9E2'], tile: ['#FFE055', '#DFA800'], wave: '#EAB500' },
-  teal: { surface: ['#FFFFFF', '#EBFFF9'], tile: ['#20D4A4', '#087A66'], wave: '#09C8A0' },
-} as const;
-const waveLine = 'M0 43 C15 46 25 22 40 22 S56 38 70 23 S91 -4 103 9';
-
-function MetricCard({ label, value, icon, caption, tone, onPress }: {
-  label: string;
-  value: number;
-  icon: React.ComponentProps<typeof Feather>['name'];
-  caption: string;
-  tone: keyof typeof metricColors;
-  onPress: () => void;
-}) {
-  const { colors, ui, themeName } = useStudioTheme();
-  const styles = makeStyles(colors);
- 
-  const palette = metricColors[tone];
-  const gradientId = `metric-wave-${tone}`;
-  return (
-    <Pressable onPress={onPress} accessibilityRole="button" style={({ pressed }) => [styles.metricWrap, pressed && { opacity: 0.78 }]} accessibilityLabel={`${label}: ${value}, ${caption}`}>
-      <LinearGradient colors={themeName === 'dark' ? [colors.card, colors.card] : themeName === 'light' ? palette.surface : [colors.card, colors.mint]} style={styles.metric}>
-        <View style={styles.metricHeader}>
-          <LinearGradient colors={palette.tile} style={styles.metricIcon}>
-            <Feather name={icon} size={21} color="#FFFFFF" />
-          </LinearGradient>
-          <Text style={styles.metricLabel}>{label}</Text>
-        </View>
-        <View style={styles.metricBody}>
-          <View style={ui.flex}>
-            <Text style={styles.value}>{value}</Text>
-            <Text style={styles.metricCaption}>{caption}</Text>
-          </View>
-          <View style={styles.metricWave} pointerEvents="none" importantForAccessibility="no-hide-descendants">
-            <Svg width="100%" height="100%" viewBox="0 0 104 58">
-              <Defs>
-                <SvgGradient id={gradientId} x1="0" x2="0" y1="0" y2="1">
-                  <Stop offset="0" stopColor={palette.wave} stopOpacity={0.4} />
-                  <Stop offset="1" stopColor={palette.wave} stopOpacity={0} />
-                </SvgGradient>
-              </Defs>
-              <Path d={`${waveLine} L103 58 H0 Z`} fill={`url(#${gradientId})`} />
-              <Path d={waveLine} fill="none" stroke={palette.wave} strokeWidth={1.5} />
-            </Svg>
-          </View>
-        </View>
-      </LinearGradient>
-    </Pressable>
-  );
-}
 function UpcomingCard({ event, onPress }: { event: StudioEvent; onPress: () => void }) {
   const { colors, ui } = useStudioTheme();
   const styles = makeStyles(colors);
@@ -173,14 +119,5 @@ const makeStyles = (colors: Palette) => StyleSheet.create({
   greeting: { flexGrow: 1, flexShrink: 1, minWidth: 0, gap: 8 },
   name: { borderLeftWidth: 4, borderColor: colors.primary, paddingLeft: 9, fontSize: 27 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  metricWrap: { flexGrow: 1, flexBasis: '45%', borderRadius: 18, backgroundColor: colors.card, elevation: 2, shadowColor: '#248B7B', shadowOpacity: 0.13, shadowRadius: 7, shadowOffset: { width: 0, height: 4 } },
-  metric: { flex: 1, minHeight: 113, borderRadius: 18, borderWidth: 1.5, borderColor: colors.border, padding: 10, gap: 6 },
-  metricHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  metricIcon: { width: 37, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  metricLabel: { flex: 1, color: colors.text, fontSize: 13, fontFamily: 'InterBold' },
-  metricBody: { flexDirection: 'row', alignItems: 'flex-end', gap: 3 },
-  metricCaption: { color: colors.text, fontSize: 12 },
-  metricWave: { width: '41%', height: 37 },
-  value: { color: colors.text, fontSize: 29, fontFamily: 'InterExtraBold', letterSpacing: -0.7 },
   dateBadge: { width: 51, height: 55, backgroundColor: colors.mint, borderWidth: 1, borderColor: colors.border, borderRadius: 14, justifyContent: 'center', alignItems: 'center', gap: 3 }, day: { color: colors.text, fontSize: 22, fontFamily: 'InterExtraBold' }, month: { color: colors.primary, fontSize: 10, fontFamily: 'InterExtraBold' },
 });

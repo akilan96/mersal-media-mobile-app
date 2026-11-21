@@ -176,8 +176,28 @@ test('shared studio requires a join code and uses the same events for separate s
 
 test('owner creates admin and client accounts while clients cannot access studio records', async () => {
   const { store, close } = createSqliteStore(':memory:');
-  const ownerData = { version: 1 as const, profile: { username: 'aki', name: 'Aki', studioName: 'Mersal Media', phone: '', email: '' }, events: [], clients: [] };
-  const accounts = new Map<string, { id: string; name: string; pin: string; role: 'admin' | 'client' }>();
+  const clientId = '11111111-1111-4111-8111-111111111111';
+  const otherClientId = '22222222-2222-4222-8222-222222222222';
+  const date = '2026-11-23T10:00:00Z';
+  const galleryId = 'gallery-linked';
+  const otherGalleryId = 'gallery-unrelated';
+  const driveLink = 'https://drive.google.com/drive/folders/siva-gallery';
+  let driveReads = 0;
+  const event = { title: 'Shoot', date, location: 'Studio', attendees: 1, type: 'Portraits', crew: [], equipment: [], notes: '', createdAt: date };
+  const ownerData = {
+    version: 1 as const, profile: { username: 'aki', name: 'Aki', studioName: 'Mersal Media', phone: '', email: '' },
+    clients: [clientId, otherClientId].map(id => ({ id, name: id, phone: '', email: '', notes: '', createdAt: date })),
+    events: [
+      { ...event, id: 'linked', clientId, status: 'Scheduled' as const, totalAmount: 100, payments: [{ id: 'receipt', amount: 25, date, note: 'Advance' }] },
+      { ...event, id: 'cancelled', clientId, status: 'Cancelled' as const, totalAmount: 900, payments: [] },
+      { ...event, id: 'unrelated', clientId: otherClientId, status: 'Scheduled' as const, totalAmount: 800, payments: [] },
+    ],
+    photoGalleries: [
+      { id: galleryId, clientId, driveLink, createdAt: date },
+      { id: otherGalleryId, clientId: otherClientId, driveLink: 'https://drive.google.com/drive/folders/unrelated', createdAt: date },
+    ],
+  };
+  const accounts = new Map<string, { id: string; name: string; pin: string; role: 'admin' | 'client'; clientId?: string }>();
   const sessions = new Map<string, { id: string; expires: number }>();
   accounts.set('aki', { id: 'aki-id', name: 'Aki', pin: '1234', role: 'client' });
   const app = createExpressApi({
@@ -192,7 +212,7 @@ test('owner creates admin and client accounts while clients cannot access studio
       const session = sessions.get(hash);
       if (!session || session.expires <= now) return null;
       for (const [username, account] of accounts) {
-        if (session.id === account.id) return { username, role: account.role };
+        if (session.id === account.id) return { username, role: account.role, clientId: account.clientId };
       }
       return null;
     },
@@ -206,7 +226,25 @@ test('owner creates admin and client accounts while clients cannot access studio
     listManagedAccounts() {
       return Array.from(accounts, ([username, account]) => ({ username, name: account.name, role: account.role }));
     },
-  }, express(), { pinMode: true, ownerUsername: 'aki' });
+    linkClientAccount(username, id) {
+      const account = accounts.get(username);
+      if (!account || account.role !== 'client') return false;
+      account.clientId = id;
+      return true;
+    },
+  }, express(), { pinMode: true, ownerUsername: 'aki', drive: {
+    async list(link) {
+      assert.equal(link, driveLink);
+      driveReads++;
+      return { photos: [{ id: 'preview', name: 'Photo 1', hasThumbnail: true }], nextPageToken: undefined };
+    },
+    async thumbnail(link, fileId) {
+      assert.equal(link, driveLink);
+      assert.equal(fileId, 'preview');
+      driveReads++;
+      return { contentType: 'image/png', bytes: Buffer.from('test photo') };
+    },
+  } });
   const server = app.listen(0, '127.0.0.1');
   try {
     await once(server, 'listening');
@@ -239,6 +277,22 @@ test('owner creates admin and client accounts while clients cannot access studio
       assert.equal((await request('/accounts', 'GET', token)).status, 403);
       assert.equal((await request('/events', 'GET', token)).status, role === 'client' ? 403 : 200);
       if (role === 'client') {
+        const summaryPath = '/client/payment-summary';
+        const galleryPath = '/client/galleries';
+        const linkPath = '/accounts/' + account.username + '/client';
+        assert.equal(await (await request(summaryPath, 'GET', token)).json(), null);
+        assert.deepEqual((await (await request(galleryPath, 'GET', token)).json()).galleries, []);
+        assert.equal((await request(linkPath, 'PATCH', token, { clientId: otherClientId })).status, 403);
+        assert.equal((await request(linkPath, 'PATCH', owner, { clientId })).status, 200);
+        assert.deepEqual(await (await request(summaryPath + '?clientId=' + otherClientId, 'GET', token)).json(), { total: 100, pending: 75 });
+        assert.deepEqual(await (await request(galleryPath + '?clientId=' + otherClientId, 'GET', token)).json(),
+          { galleries: [{ id: galleryId, driveLink, createdAt: date }], previewsEnabled: true });
+        assert.equal((await request(galleryPath + '/' + otherGalleryId + '/photos', 'GET', token)).status, 404);
+        assert.equal((await request(galleryPath + '/' + otherGalleryId + '/photos/preview/thumbnail', 'GET', token)).status, 404);
+        assert.equal(driveReads, 0);
+        assert.equal((await request(galleryPath + '/' + galleryId + '/photos', 'GET', token)).status, 200);
+        assert.equal((await request(galleryPath + '/' + galleryId + '/photos/preview/thumbnail', 'GET', token)).status, 200);
+        assert.equal(driveReads, 2);
         for (const path of ['/studio', '/clients', '/settings', '/settings/home-photo', '/dashboard', '/profile']) {
           assert.equal((await request(path, 'GET', token)).status, 403, path);
         }

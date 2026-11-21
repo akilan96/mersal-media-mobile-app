@@ -19,12 +19,13 @@ import { WelcomeScreen } from '../screens/WelcomeScreen';
 import { LoginScreen } from '../screens/LoginScreen';
 import { PhotosScreen } from '../screens/PhotosScreen';
 import AccountsScreen from '../screens/AccountsScreen';
-import { ClientFavouritesScreen, ClientHelpScreen, ClientPhotosScreen } from '../screens/ClientAreaScreens';
+import { ClientFavouritesScreen, ClientHomeScreen, ClientSettingsScreen } from '../screens/ClientAreaScreens';
+import { ClientPhotosScreen } from '../screens/ClientPhotosScreen';
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tabs = createBottomTabNavigator<MainTabParamList>();
-const ClientTabs = createBottomTabNavigator<{ Photos: undefined; Favourites: undefined; Help: undefined }>();
+const ClientTabs = createBottomTabNavigator<{ Home: undefined; Photos: undefined; Favourites: undefined; Settings: undefined }>();
 const makeNavigationTheme = (colors: Palette, dark: boolean) => ({ ...DefaultTheme, dark, colors: { ...DefaultTheme.colors, primary: colors.primary, background: colors.background, card: colors.card, text: colors.text, border: colors.border } });
-const icons = { Home: 'home', Events: 'calendar', Photos: 'image', Clients: 'users', Settings: 'settings', Favourites: 'heart', Help: 'help-circle' } as const;
+const icons = { Home: 'home', Events: 'calendar', Photos: 'image', Clients: 'users', Settings: 'settings', Favourites: 'heart' } as const;
 function TabHighlight({ selected, reduceMotion }: { selected: boolean; reduceMotion: boolean }) {
   const { colors } = useStudioTheme();
   const styles = makeStyles(colors);
@@ -91,16 +92,21 @@ function MainTabs() {
     return () => { active = false; subscription.remove(); };
   }, []);
   return <Tabs.Navigator screenOptions={{ headerShown: false, animation: reduceMotion ? 'none' : 'fade', sceneStyle: { backgroundColor: colors.background } }} tabBar={props => <BottomNavigation {...props} reduceMotion={reduceMotion} />}>
-  <Tabs.Screen name="Home" component={HomeScreen} /><Tabs.Screen name="Events" component={EventsScreen} /><Tabs.Screen name="Photos" component={PhotosScreen} /><Tabs.Screen name="Clients" component={ClientsScreen} /><Tabs.Screen name="Settings" component={SettingsScreen} />
+  <Tabs.Screen name="Home" component={HomeScreen} />
+  <Tabs.Screen name="Events" component={EventsScreen} />
+  <Tabs.Screen name="Clients" component={ClientsScreen} />
+  <Tabs.Screen name="Photos" component={PhotosScreen} />
+  <Tabs.Screen name="Settings" component={SettingsScreen} />
 </Tabs.Navigator>; }
 
 function ClientArea() {
   const { colors } = useStudioTheme();
   return <ClientTabs.Navigator screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: colors.background } }}
     tabBar={props => <BottomNavigation {...props} reduceMotion />}>
+    <ClientTabs.Screen name="Home" component={ClientHomeScreen} />
     <ClientTabs.Screen name="Photos" component={ClientPhotosScreen} />
     <ClientTabs.Screen name="Favourites" component={ClientFavouritesScreen} />
-    <ClientTabs.Screen name="Help" component={ClientHelpScreen} />
+    <ClientTabs.Screen name="Settings" component={ClientSettingsScreen} />
   </ClientTabs.Navigator>;
 }
 
