@@ -6,7 +6,20 @@ import { join } from 'node:path';
 import test from 'node:test';
 import express from 'express';
 import { createExpressApi } from '../backend/api';
+import { createDriveReader } from '../backend/drive';
 import { createApi, createSqliteStore } from '../backend/sqlite';
+
+test('Drive previews can initialize using federation without a service-account key', () => {
+  assert.equal(createDriveReader({ GCP_PROJECT_NUMBER: '1234567890' }), undefined);
+  const reader = createDriveReader({
+    GCP_PROJECT_NUMBER: '1234567890',
+    GCP_WORKLOAD_IDENTITY_POOL_ID: 'vercel',
+    GCP_WORKLOAD_IDENTITY_POOL_PROVIDER_ID: 'vercel',
+    GCP_SERVICE_ACCOUNT_EMAIL: 'reader@sample-project.iam.gserviceaccount.com',
+  });
+  assert.equal(typeof reader?.list, 'function');
+  assert.equal(typeof reader?.thumbnail, 'function');
+});
 
 test('studio API persists private data and validates event and client workflows', async () => {
   const folder = mkdtempSync(join(tmpdir(), 'mersal-api-'));

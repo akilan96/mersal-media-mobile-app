@@ -1,7 +1,10 @@
 import { createSign } from 'node:crypto';
+import { getVercelOidcToken } from '@vercel/oidc';
+import { IdentityPoolClient } from 'google-auth-library';
 import { StoreError } from './store';
 
 const googleApi = 'https://www.googleapis.com/drive/v3/files';
+const driveScope = 'https://www.googleapis.com/auth/drive.readonly';
 const idPattern = /^[a-zA-Z0-9_-]{1,256}$/;
 const photoMime = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif', 'image/heic', 'image/heif']);
 type DriveItem = { id: string; name: string; mimeType: string; parents?: string[]; thumbnailLink?: string; trashed?: boolean };
@@ -20,8 +23,24 @@ export function driveTarget(link: string): DriveTarget {
   return { kind: folder ? 'folder' : file || url.pathname === '/uc' ? 'file' : 'unknown', id, resourceKey: key && idPattern.test(key) ? key : undefined };
 }
 
-export function createDriveReader(serviceAccountJson: string | undefined) {
-  if (!serviceAccountJson) return undefined;
+export function createDriveReader(env: Readonly<Record<string, string | undefined>>) {
+  const serviceAccountJson = env.GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON;
+  const project = env.GCP_PROJECT_NUMBER?.trim();
+  const pool = env.GCP_WORKLOAD_IDENTITY_POOL_ID?.trim();
+  const provider = env.GCP_WORKLOAD_IDENTITY_POOL_PROVIDER_ID?.trim();
+  const accountEmail = env.GCP_SERVICE_ACCOUNT_EMAIL?.trim();
+  const federated = project && pool && provider && accountEmail
+    ? new IdentityPoolClient({
+      type: 'external_account',
+      audience: `//iam.googleapis.com/projects/${project}/locations/global/workloadIdentityPools/${pool}/providers/${provider}`,
+      subject_token_type: 'urn:ietf:params:oauth:token-type:jwt',
+      token_url: 'https://sts.googleapis.com/v1/token',
+      service_account_impersonation_url: `https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/${encodeURIComponent(accountEmail)}:generateAccessToken`,
+      subject_token_supplier: { getSubjectToken: () => getVercelOidcToken() },
+      scopes: [driveScope],
+    })
+    : null;
+  if (!federated && !serviceAccountJson) return undefined;
   let cached: { value: string; expiresAt: number } | undefined;
   let requesting: Promise<string> | undefined;
 
@@ -31,7 +50,7 @@ export function createDriveReader(serviceAccountJson: string | undefined) {
       const now = Math.floor(Date.now() / 1000);
       const encode = (value: object) => Buffer.from(JSON.stringify(value)).toString('base64url');
       const unsigned = encode({ alg: 'RS256', typ: 'JWT' }) + '.' + encode({
-        iss: account.client_email, scope: 'https://www.googleapis.com/auth/drive.readonly',
+        iss: account.client_email, scope: driveScope,
         aud: 'https://oauth2.googleapis.com/token', iat: now, exp: now + 3600,
       });
       const signature = createSign('RSA-SHA256').update(unsigned).sign(account.private_key, 'base64url');
@@ -50,8 +69,18 @@ export function createDriveReader(serviceAccountJson: string | undefined) {
   }
 
   async function headers(target: DriveTarget) {
-    let token = cached?.value;
-    if (!cached || cached.expiresAt - 60_000 <= Date.now()) {
+    let token: string;
+    if (federated) {
+      try {
+        const credential = await federated.getAccessToken();
+        if (!credential.token) throw new Error('No Drive access token');
+        token = credential.token;
+      } catch {
+        throw new StoreError(503, 'Google Drive is unavailable. Contact the studio for help.');
+      }
+    } else if (cached && cached.expiresAt - 60_000 > Date.now()) {
+      token = cached.value;
+    } else {
       requesting ??= issueToken().finally(() => { requesting = undefined; });
       token = await requesting;
     }

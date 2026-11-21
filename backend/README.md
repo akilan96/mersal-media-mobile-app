@@ -59,7 +59,16 @@ The staff Photos tab reads its gallery list from `GET /api/v1/studio`. Staff cre
 
 In **Settings → Accounts** choose **Link client** for the client login and select the same client record used for the gallery in the staff Photos tab. The client Photos tab lists only galleries for that linked record. The client API resolves the record from the signed-in session, and checks the link again on photo and thumbnail requests.
 
-To enable in-app previews, enable the Google Drive API in your Google Cloud project and create a service account. Add the full service-account key JSON as the server-only Vercel Production variable `GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON`, give that service account Viewer access to the specific folder or file, and redeploy. The app lists image files directly inside shared folders and requests thumbnails through the API. The **Open in Google Drive** button is available without the service account. Drive still uses its own sharing permissions when opening that link. To restrict direct Drive access, share with the intended client’s Google account rather than using an anyone-with-the-link setting.
+The app lists image files directly inside shared folders and requests thumbnails through the API. **Open in Google Drive** uses the folder's existing Google sharing permissions.
+
+#### Keyless setup on Vercel
+
+1. In Google Cloud, enable the Drive API, IAM API, IAM Service Account Credentials API, and Security Token Service API. Keep the existing service account. Share each client folder with that account's email as **Viewer**.
+2. Follow [Vercel's Google Cloud OIDC guide](https://vercel.com/docs/oidc/gcp) to create a workload identity pool and OpenID Connect provider. For Vercel's **Team** issuer mode, use its team issuer (`https://oidc.vercel.com/<team-slug>`) and choose **Allowed audiences** with `https://vercel.com/<team-slug>`. Set `google.subject` to `assertion.sub` and restrict the attribute condition to `assertion.sub == 'owner:<team-slug>:project:<project-name>:environment:production'`.
+3. On the service account's **Permissions** tab, grant **Workload Identity User** to `principal://iam.googleapis.com/projects/<project-number>/locations/global/workloadIdentityPools/<pool-id>/subject/owner:<team-slug>:project:<project-name>:environment:production`. Use the Google Cloud **project number** that owns the identity pool. There is no need to grant the service account a project-wide IAM role for Drive folder access.
+4. In Vercel **Production** environment variables set `GCP_PROJECT_NUMBER`, `GCP_WORKLOAD_IDENTITY_POOL_ID`, `GCP_WORKLOAD_IDENTITY_POOL_PROVIDER_ID`, and `GCP_SERVICE_ACCOUNT_EMAIL` to the exact Google Cloud values. Deploy the updated backend. Vercel exchanges its runtime OIDC token for a short-lived, read-only Drive token.
+
+If an existing deployment already uses a service-account key, it can continue using `GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON`. The keyless configuration takes precedence when all four OIDC variables are present.
 
 The existing API returns whole lists and snapshots. On Atlas, each studio's JSON snapshot is capped at 4 MiB to fit Vercel's response limit. The current authentication rate limit is per server instance. If you require a deployment-wide limit, enforce it at the edge or configure a shared rate-limit store.
 
