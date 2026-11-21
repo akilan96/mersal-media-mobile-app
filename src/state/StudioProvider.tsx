@@ -12,7 +12,7 @@ export interface StudioContext {
   cloud: boolean;
   data: StudioData; configured: boolean; authenticated: boolean; loading: boolean; storageError: string | null;
   authError: string | null; busy: boolean; retryLoad(): void;
-  setup(profile: Profile, pin: string): Promise<void>; unlock(username: string, pin: string): Promise<void>;
+  setup(profile: Profile, pin: string, joinCode?: string): Promise<void>; unlock(username: string, pin: string): Promise<void>;
   lock(): void; changePin(currentPin: string, newPin: string): Promise<void>;
   saveEvent(input: EventInput, id?: string, contact?: { name: string; phone: string }): Promise<string>; deleteEvent(id: string): Promise<void>;
   recordPayment(eventId: string, amount: number, note: string): Promise<void>;

@@ -1,12 +1,12 @@
 import type { StudioData } from '../src/domain/types';
 
-export interface StudioAccount {
+export type StudioCredential = { pin: string } | { salt: string; passwordHash: string };
+
+export type StudioAccount = StudioCredential & {
   id: string;
   username: string;
-  salt: string;
-  passwordHash: string;
   data: StudioData;
-}
+};
 
 export interface SessionRecord {
   hash: string;
@@ -22,14 +22,16 @@ export interface HomePhoto {
 type Result<T> = T | Promise<T>;
 
 export interface StudioStore {
+  claimPinAttempt?(username: string): Result<boolean>;
+  clearPinAttempts?(username: string): Result<void>;
   ping(): Result<void>;
   register(account: StudioAccount, session: SessionRecord): Result<boolean>;
-  findCredentials(username: string): Result<Pick<StudioAccount, 'id' | 'salt' | 'passwordHash'> | null>;
+  findCredentials(username: string): Result<({ id: string } & StudioCredential) | null>;
   createSession(session: SessionRecord): Result<void>;
   findSession(hash: string, now: number): Result<string | null>;
   revokeSession(hash: string): Result<void>;
   load(studioId: string): Result<{ data: StudioData; revision: number } | null>;
-  save(studioId: string, revision: number, data: StudioData): Result<boolean>;
+  save(studioId: string, revision: number, data: StudioData, previous: StudioData): Result<boolean>;
   hasPhoto(studioId: string): Result<boolean>;
   getPhoto(studioId: string): Result<HomePhoto | null>;
   savePhoto(studioId: string, photo: HomePhoto): Result<void>;

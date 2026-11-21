@@ -2,7 +2,7 @@
 
 Run `npm ci` and `npm run api` from the project root with Node 26.x. The API listens on `http://127.0.0.1:3001/api/v1` and stores data in `backend/data/studio.sqlite`. Override the defaults with `MERSAL_API_HOST`, `MERSAL_API_PORT`, and `MERSAL_API_DB`. The API and Expo run as separate processes.
 
-Registration creates a private studio and its owner account. Use a username and a password of 12–128 characters. All routes except health, register, and login require `Authorization: Bearer <token>`. A session expires after seven days and logout revokes the token immediately. The studio account password is separate from the device PIN. The mobile app uses the API when EXPO_PUBLIC_API_URL is configured. Existing device records require a separate import.
+Atlas accounts share the same studio records. The SQLite development API keeps separate studios. Use a username and a four-digit PIN on Atlas. SQLite development accounts use passwords of 12–128 characters. All routes except health, register, and login require `Authorization: Bearer <token>`. A session expires after seven days and logout revokes the token immediately. The mobile app uses the API when EXPO_PUBLIC_API_URL is configured. Existing device records require a separate import.
 
 | Method | Endpoint under /api/v1 | Purpose |
 | --- | --- | --- |
@@ -26,7 +26,7 @@ Registration creates a private studio and its owner account. Use a username and 
 
 ## Request examples
 
-Register with JSON containing `username`, `password`, and a `profile` with `name`, `studioName`, and optional `phone` and `email`. Login takes `username` and `password`. Both return `token` and `expiresAt`. Profile updates permit `name`, `studioName`, `phone`, and `email`.
+Register with JSON containing `username`, `password`, and a `profile` with `name`, `studioName`, and optional `phone` and `email`. On Atlas, send `pin` in place of `password` and include `joinCode` when registering. Send `username` and `pin` to sign in on Atlas. Both return `token` and `expiresAt`. Profile updates permit `name`, `studioName`, `phone`, and `email`.
 
 Create an event with `title`, ISO date and time with an offset in `date`, `location`, `type`, and `totalAmount`. Optional fields include `attendees`, `crew`, `equipment`, `notes`, `status`, and `advance`. Link by `clientId` or send a `contact` object with `phone` and, for a new number, `name`. The API matches phone digits, creates new contacts when needed, and saves the client link and event together. Event PATCH accepts individual event fields. Send `clientId: null` to unlink. Linked clients must be unlinked before deletion.
 
@@ -38,7 +38,7 @@ Successful creates return 201. Successful deletes and logout return 204. Errors 
 
 ## Integration and deployment
 
-Configure the Expo app using the connection steps below. The native app stores session tokens in SecureStore. Plan explicit import and conflict handling for existing device data. The API defaults to loopback for local use. Use the Vercel setup below for HTTPS and persistent Atlas storage. The repository includes one owner account per studio, with no staff roles or password recovery flow.
+Configure the Expo app using the connection steps below. The native app stores session tokens in SecureStore. Plan explicit import and conflict handling for existing device data. The API defaults to loopback for local use. Atlas PIN sign-in admits five attempts per account per 15-minute window. Use the Vercel setup below for HTTPS and persistent Atlas storage. The repository includes one owner account per studio, with no staff roles or password recovery flow.
 
 Run `npm test` to exercise the API over HTTP against a disposable SQLite file. The test verifies private studio data, event/client linking, validation, photos, and persistence after restarting the server.
 
@@ -47,9 +47,11 @@ Run `npm test` to exercise the API over HTTP against a disposable SQLite file. T
 1. In Atlas, create a database user with the built-in `readWrite` role scoped to the app database. Use an Atlas deployment that supports replica-set transactions. Configure Atlas Network Access to allow connections from your Vercel deployment.
 2. Import this repository into Vercel. Use the repository root and the Express framework preset. The root `server.ts` is the Express entry point. Node.js 22.x or 24.x can run this entry point. The SQLite development server uses Node 26.x.
 3. In Vercel project settings, set `MONGODB_URI` to the Atlas connection string as a server-only environment variable. Set `MONGODB_DB` if your database name differs from `mersal_media`. Use a separate database and credentials for previews if previews are enabled.
-4. Deploy and request `GET /api/v1/health` on the deployment domain. A 200 response verifies Atlas connectivity. Then register a test studio and verify login, event/client linking, payment recording, and logout.
+4. Set the server-only `MERSAL_JOIN_CODE` to a random secret of at least 20 characters. Share it only with the people you want to join.
+5. Deploy the backend and request `GET /api/v1/health` to initialize the collections and confirm Atlas connectivity.
+6. Restart Expo. On **Join a studio**, create the first account with a username, four-digit PIN, and the join code. The first account sets the shared studio profile.
 
-The first connection creates three collections and their indexes. `studios` stores studio accounts and the profile, events, clients, payments, and settings. `studio_sessions` stores hashed session tokens and uses a TTL index to remove expired sessions. `studio_home_photos` stores image bytes separately so regular API requests do not fetch them. Each warm server instance reuses a MongoDB connection pool. Registration uses a transaction. Studio edits use a revision check so concurrent writes cannot silently overwrite one another.
+Atlas stores usernames and four-digit PINs in `auth`, events in `events`, client records in `clients`, and receipts in `payments` with an `eventId` link. `studio_workspace` stores shared settings and the revision. All authenticated users have the same read and write access. Writes use a transaction and revision check to keep linked records consistent.
 
 The existing API returns whole lists and snapshots. On Atlas, each studio's JSON snapshot is capped at 4 MiB to fit Vercel's response limit. The current authentication rate limit is per server instance. If you require a deployment-wide limit, enforce it at the edge or configure a shared rate-limit store.
 
@@ -57,7 +59,7 @@ SQLite files and Expo device data require a separate migration.
 
 ## Run the Atlas-backed API locally
 
-Copy `.env.example` to `.env` and set `MONGODB_URI`. From the repository root run
+Copy `.env.example` to `.env` and set the Atlas connection and server secrets. From the repository root run
 `npm run api:atlas`, then request `http://127.0.0.1:3001/api/v1/health`.
 Set `MERSAL_API_PORT` to use a different port.
 

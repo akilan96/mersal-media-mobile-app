@@ -12,14 +12,14 @@ export const profileSchema = new Schema({
   email: { type: String, default: '' },
 }, nested);
 
-export const clientSchema = new Schema({
-  id: { type: String, required: true },
+const clientFields = {
   name: { type: String, required: true, maxlength: 100 },
   phone: { type: String, default: '' },
   email: { type: String, default: '' },
   notes: { type: String, default: '', maxlength: 2000 },
   createdAt: { type: String, required: true },
-}, nested);
+} as const;
+export const clientSchema = new Schema({ id: { type: String, required: true }, ...clientFields }, nested);
 
 export const paymentSchema = new Schema({
   id: { type: String, required: true },
@@ -28,8 +28,7 @@ export const paymentSchema = new Schema({
   note: { type: String, required: true, maxlength: 200 },
 }, nested);
 
-export const eventSchema = new Schema({
-  id: { type: String, required: true },
+const eventFields = {
   title: { type: String, required: true, maxlength: 180 },
   date: { type: String, required: true },
   location: { type: String, required: true, maxlength: 250 },
@@ -40,10 +39,10 @@ export const eventSchema = new Schema({
   crew: [String],
   equipment: [String],
   totalAmount: { type: Number, required: true, min: 0, max: 1e10 },
-  payments: [paymentSchema],
   notes: { type: String, default: '', maxlength: 3000 },
   createdAt: { type: String, required: true },
-}, nested);
+};
+export const eventSchema = new Schema({ id: { type: String, required: true }, ...eventFields, payments: [paymentSchema] }, nested);
 
 const studioDataSchema = new Schema({
   version: { type: Number, required: true, enum: [1] },
@@ -61,7 +60,7 @@ const studioSchema = new Schema({
   passwordHash: { type: String, required: true, select: false, match: /^[a-f0-9]{128}$/ },
   revision: { type: Number, required: true, default: 0, min: 0, validate: Number.isInteger },
   data: { type: studioDataSchema, required: true },
-}, collection);
+}, { ...collection, autoIndex: false, autoCreate: false });
 studioSchema.index({ username: 1 }, { unique: true });
 
 const sessionSchema = new Schema({
@@ -77,9 +76,52 @@ const homePhotoSchema = new Schema({
   bytes: { type: Buffer, required: true, validate: (bytes: Buffer) => bytes.length > 0 && bytes.length <= 4 * 1024 * 1024 },
 }, collection);
 
+const userSchema = new Schema({
+  _id: { type: String, required: true },
+  username: { type: String, required: true, match: /^[a-z0-9_.-]{3,40}$/ },
+  pin: { type: String, required: true, select: false, match: /^\d{4}$/ },
+  attempts: Number,
+  attemptUntil: Number,
+  profile: { type: profileSchema, default: null },
+}, collection);
+userSchema.index({ username: 1 }, { unique: true });
+
+const workspaceSchema = new Schema({
+  _id: { type: String, required: true },
+  revision: { type: Number, required: true, min: 0 },
+  profile: { type: profileSchema, default: null },
+  theme: { type: String, enum: [...themeNames, 'pancake'] },
+  customEventTypes: { type: [String], default: undefined },
+}, collection);
+
+const sharedEventSchema = new Schema({
+  _id: { type: String, required: true },
+  ...eventFields,
+}, collection);
+sharedEventSchema.index({ createdAt: -1 });
+sharedEventSchema.index({ clientId: 1 });
+sharedEventSchema.index({ status: 1, date: 1 });
+
+const sharedClientSchema = new Schema({
+  _id: { type: String, required: true },
+  ...clientFields,
+}, collection);
+sharedClientSchema.index({ createdAt: -1 });
+
+const sharedPaymentSchema = new Schema({
+  _id: { type: String, required: true },
+  eventId: { type: String, required: true },
+  ...paymentSchema.obj,
+}, collection);
+sharedPaymentSchema.index({ eventId: 1, date: 1 });
 export function createMongoModels(connection: Connection) {
   return {
     Studio: connection.model('Studio', studioSchema, 'studios'),
+    User: connection.model('AuthAccount', userSchema, 'auth'),
+    Workspace: connection.model('StudioWorkspace', workspaceSchema, 'studio_workspace'),
+    Event: connection.model('SharedEvent', sharedEventSchema, 'events'),
+    Client: connection.model('SharedClient', sharedClientSchema, 'clients'),
+    Payment: connection.model('SharedPayment', sharedPaymentSchema, 'payments'),
     Session: connection.model('StudioSession', sessionSchema, 'studio_sessions'),
     HomePhoto: connection.model('StudioHomePhoto', homePhotoSchema, 'studio_home_photos'),
   };

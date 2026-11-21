@@ -6,5 +6,5 @@ deliverables/
 *.log
 *.tsbuildinfo
 .env*
-!.env.example
+.env.example
 backend/data/

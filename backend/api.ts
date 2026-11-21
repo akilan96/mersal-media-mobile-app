@@ -37,11 +37,11 @@ const eventFields = z.object({
 const onlyProvided = <T extends object>(parsed: T, body: object): Partial<T> =>
   Object.fromEntries(Object.entries(parsed).filter(([key]) => Object.hasOwn(body, key))) as Partial<T>;
 const credentials = z.object({ username, password });
-const createAccount = credentials.extend({ profile: profileFields });
+const createAccount = credentials.extend({ profile: profileFields, joinCode: z.string().max(256).optional() });
 const receipt = z.object({ amount: z.number().positive(), note: z.string().trim().min(1).max(200).default('Payment received') });
 const theme = z.union([z.enum(themeNames), z.literal('pancake')]);
 
-export function createExpressApi(store: StudioStore, app = express()) {
+export function createExpressApi(store: StudioStore, app = express(), sharedSignup?: { joinCode?: string; pinMode?: boolean }) {
   app.disable('x-powered-by');
   app.use((_req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
   app.use(express.json({ limit: '64kb' }));
@@ -50,6 +50,12 @@ export function createExpressApi(store: StudioStore, app = express()) {
   const api = express.Router();
   app.use('/api/v1', api);
   api.get('/health', async (_req, res) => { await store.ping(); res.json({ status: 'ok' }); });
+  api.get('/auth/config', (_req, res) => res.json({ pinMode: Boolean(sharedSignup?.pinMode) }));
+
+  function authInput(body: unknown) {
+    if (!sharedSignup?.pinMode) return credentials.parse(body);
+    return z.object({ username, pin: z.string().regex(/^\d{4}$/, 'Enter exactly four digits.') }).parse(body);
+  }
 
   function issueSession(studioId: string) {
     const token = randomBytes(32).toString('base64url');
@@ -61,24 +67,49 @@ export function createExpressApi(store: StudioStore, app = express()) {
   }
 
   api.post('/auth/register', authLimit, async (req, res) => {
-    const input = createAccount.parse(req.body);
+    const auth = authInput(req.body);
+    const input = { ...createAccount.pick({ profile: true, joinCode: true }).parse(req.body), ...auth };
+    if (sharedSignup) {
+      const secret = sharedSignup.joinCode;
+      if (!secret || secret.length < 20) throw new ApiError(403, 'Contact your studio to request an account.');
+      if (!input.joinCode || !timingSafeEqual(Buffer.from(tokenHash(input.joinCode)), Buffer.from(tokenHash(secret)))) {
+        throw new ApiError(403, 'Enter the studio join code.');
+      }
+    }
     const id = randomUUID();
-    const salt = randomBytes(16).toString('hex');
-    const hash = (await scryptAsync(input.password, salt)).toString('hex');
+    let credential;
+    if ('pin' in auth) credential = { pin: auth.pin };
+    else {
+      const salt = randomBytes(16).toString('hex');
+      credential = { salt, passwordHash: (await scryptAsync(auth.password, salt)).toString('hex') };
+    }
     const profile = { ...input.profile, username: input.username };
     const data: StudioData = { version: 1, profile, events: [], clients: [] };
     const session = issueSession(id);
-    const created = await store.register({ id, username: input.username, salt, passwordHash: hash, data }, session.record);
+    const created = await store.register({ id, username: input.username, ...credential, data }, session.record);
     if (!created) throw new ApiError(409, 'Username is already in use.');
     res.status(201).json({ ...session.response, profile });
   });
 
   api.post('/auth/login', authLimit, async (req, res) => {
-    const input = credentials.parse(req.body);
+    const input = authInput(req.body);
+    if (sharedSignup?.pinMode && !await store.claimPinAttempt?.(input.username)) {
+      throw new ApiError(429, 'Too many PIN attempts. Try again in 15 minutes.');
+    }
     const row = await store.findCredentials(input.username);
-    const supplied = await scryptAsync(input.password, row?.salt ?? 'mersal-auth-fallback');
-    const expected = row ? Buffer.from(row.passwordHash, 'hex') : Buffer.alloc(64);
-    if (!timingSafeEqual(supplied, expected) || !row) throw new ApiError(401, 'Username or password is incorrect.');
+    if ('pin' in input) {
+      const saved = row && 'pin' in row && /^\d{4}$/.test(row.pin) ? row.pin : null;
+      if (!timingSafeEqual(Buffer.from(input.pin), Buffer.from(saved ?? '0000')) || saved === null || !row) {
+        throw new ApiError(401, 'Username or PIN is incorrect.');
+      }
+    } else {
+      const saved = row && 'passwordHash' in row ? row : null;
+      const supplied = await scryptAsync(input.password, saved?.salt ?? 'mersal-auth-fallback');
+      const expected = saved ? Buffer.from(saved.passwordHash, 'hex') : Buffer.alloc(64);
+      if (!timingSafeEqual(supplied, expected) || !saved) throw new ApiError(401, 'Username or password is incorrect.');
+    }
+    if (!row) throw new ApiError(401, 'Sign-in failed.');
+    if (sharedSignup?.pinMode) await store.clearPinAttempts?.(input.username);
     const session = issueSession(row.id);
     await store.createSession(session.record);
     res.json(session.response);
@@ -107,7 +138,7 @@ export function createExpressApi(store: StudioStore, app = express()) {
     const next = change(current.data);
     try { assertStudioData(next.data); }
     catch (cause) { throw new ApiError(422, cause instanceof Error ? cause.message : 'Invalid studio record.'); }
-    if (!(await store.save(res.locals.studioId, current.revision, next.data))) {
+    if (!(await store.save(res.locals.studioId, current.revision, next.data, current.data))) {
       throw new ApiError(409, 'The studio changed. Reload and try again.');
     }
     return next.result;

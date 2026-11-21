@@ -168,8 +168,12 @@ export function useCloudStudio(): StudioContext {
 
   return {
     cloud: true, configured: true, data, authenticated, loading, storageError, authError, busy, retryLoad,
-    setup: (profile, password) => signIn('/auth/register', { username: profile.username, password, profile }),
-    unlock: (username, password) => signIn('/auth/login', { username, password }),
+    setup: (profile, secret, joinCode) => signIn('/auth/register', {
+      username: profile.username, ...(/^\d{4}$/.test(secret) ? { pin: secret } : { password: secret }), profile, joinCode,
+    }),
+    unlock: (username, secret) => signIn('/auth/login', {
+      username, ...(/^\d{4}$/.test(secret) ? { pin: secret } : { password: secret }),
+    }),
     lock() {
       const active = session.current;
       void clear().catch(() => undefined);

@@ -31,6 +31,7 @@ export function createSqliteStore(filename: string) {
   const store: StudioStore = {
     ping() { db.prepare('SELECT 1').get(); },
     register(account, session) {
+      if (!('passwordHash' in account)) throw new Error('SQLite accounts require passwords.');
       db.exec('BEGIN IMMEDIATE');
       try {
         const result = db.prepare('INSERT INTO studios (id, username, salt, password_hash, data) VALUES (?, ?, ?, ?, ?) ON CONFLICT(username) DO NOTHING')

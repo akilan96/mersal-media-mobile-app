@@ -4,7 +4,9 @@ import { once } from 'node:events';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { createApi } from '../backend/sqlite';
+import express from 'express';
+import { createExpressApi } from '../backend/api';
+import { createApi, createSqliteStore } from '../backend/sqlite';
 
 test('studio API persists private data and validates event and client workflows', async () => {
   const folder = mkdtempSync(join(tmpdir(), 'mersal-api-'));
@@ -99,5 +101,66 @@ test('studio API persists private data and validates event and client workflows'
   } finally {
     await server.stop();
     rmSync(folder, { recursive: true, force: true });
+  }
+});
+
+test('shared studio requires a join code and uses the same events for separate sessions', async () => {
+  const { store, close } = createSqliteStore(':memory:');
+  let sharedId: string | null = null;
+  let attempts = 0;
+  const pins = new Map<string, { id: string; pin: string }>();
+  const joinCode = 'test-studio-invite-code';
+  const app = createExpressApi({
+    ...store,
+    async register(account, session) {
+      assert.ok('pin' in account);
+      const { pin, ...details } = account;
+      const created = await store.register({ ...details, salt: '', passwordHash: '' }, session);
+      if (created) pins.set(details.username, { id: details.id, pin });
+      return created;
+    },
+    findCredentials(username) { return pins.get(username) ?? null; },
+    claimPinAttempt() { return ++attempts <= 5; },
+    clearPinAttempts() { attempts = 0; },
+    async findSession(hash, now) {
+      const id = await store.findSession(hash, now);
+      if (!id) return null;
+      sharedId ??= id;
+      return sharedId;
+    },
+  }, express(), { joinCode, pinMode: true });
+  const server = app.listen(0, '127.0.0.1');
+  try {
+    await once(server, 'listening');
+    const address = server.address();
+    assert.ok(address && typeof address !== 'string');
+    const base = 'http://127.0.0.1:' + address.port + '/api/v1';
+    const post = (path: string, json: unknown, token?: string) => fetch(base + path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
+      body: JSON.stringify(json),
+    });
+    const account = { username: 'shared.owner', pin: '0314', profile: { name: 'Owner', studioName: 'Shared Studio' } };
+    assert.equal((await post('/auth/register', account)).status, 403);
+    const owner = await post('/auth/register', { ...account, joinCode });
+    assert.equal(owner.status, 201);
+    assert.equal((await post('/events', {
+      title: 'Shared shoot', date: '2030-01-01T10:00:00Z', location: 'Studio', type: 'Portraits', totalAmount: 100,
+    }, (await owner.json()).token)).status, 201);
+    const member = await post('/auth/register', { ...account, username: 'shared.member', joinCode });
+    assert.equal(member.status, 201);
+    const events = await fetch(base + '/events', { headers: { Authorization: 'Bearer ' + (await member.json()).token } });
+    assert.equal(events.status, 200);
+    assert.deepEqual((await events.json()).map((event: { title: string }) => event.title), ['Shared shoot']);
+    assert.equal((await post('/auth/login', { username: account.username, pin: '9999' })).status, 401);
+    assert.equal((await post('/auth/login', { username: account.username, pin: account.pin })).status, 200);
+    assert.equal(attempts, 0);
+    for (let i = 0; i < 5; i++) {
+      assert.equal((await post('/auth/login', { username: account.username, pin: '9999' })).status, 401);
+    }
+    assert.equal((await post('/auth/login', { username: account.username, pin: account.pin })).status, 429);
+  } finally {
+    await new Promise<void>(resolve => server.close(() => resolve()));
+    close();
   }
 });

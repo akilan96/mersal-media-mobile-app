@@ -1,4 +1,5 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { apiRequest } from '../services/cloudApi';
 import { Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
 import { Brand, Button, Card, ErrorMessage, Field, Screen } from '../components/ui';
@@ -177,9 +178,19 @@ function CloudLoginScreen() {
   const [register, setRegister] = useState(false);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [pinMode, setPinMode] = useState(false);
+  const [joinCode, setJoinCode] = useState('');
   const [name, setName] = useState('');
   const [studioName, setStudioName] = useState('');
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    void apiRequest('/auth/config').then(response => response.json()).then(config => {
+      if (active) setPinMode(config.pinMode === true);
+    }).catch(() => undefined);
+    return () => { active = false; };
+  }, []);
 
   async function submit() {
     setError('');
@@ -187,8 +198,8 @@ function CloudLoginScreen() {
       setError('Enter a studio username with 3–40 letters, numbers, dots, dashes or underscores.');
       return;
     }
-    if (password.length < 12 || password.length > 128) {
-      setError('Enter a studio password with 12–128 characters.');
+    if (pinMode ? !/^\d{4}$/.test(password) : password.length < 12 || password.length > 128) {
+      setError(pinMode ? 'Enter your four-digit PIN.' : 'Enter a studio password with 12–128 characters.');
       return;
     }
     if (register && (!name.trim() || !studioName.trim())) {
@@ -196,8 +207,13 @@ function CloudLoginScreen() {
       return;
     }
 
+    if (register && !joinCode.trim()) {
+      setError('Enter the join code from your studio.');
+      return;
+    }
+
     try {
-      if (register) await setup({ username: username.trim(), name: name.trim(), studioName: studioName.trim(), phone: '', email: '' }, password);
+      if (register) await setup({ username: username.trim(), name: name.trim(), studioName: studioName.trim(), phone: '', email: '' }, password, joinCode.trim());
       else await unlock(username.trim(), password);
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not sign in.'); }
   }
@@ -206,18 +222,20 @@ function CloudLoginScreen() {
     <Screen contentStyle={styles.content}>
       <Image source={require('../../assets/design/login-hero.png')} resizeMode="contain" style={styles.hero} />
       <View style={styles.brand}><Brand /></View>
-      <Text accessibilityRole="header" style={styles.headline}>{register ? 'Create a Studio Account' : 'Sign In to Your Studio'}</Text>
+      <Text accessibilityRole="header" style={styles.headline}>{register ? 'Join Your Studio' : 'Sign In to Your Studio'}</Text>
       <View style={styles.form}>
         {register && <>
           <Field label="Your name" value={name} onChangeText={setName} maxLength={100} editable={!busy} />
           <Field label="Studio name" value={studioName} onChangeText={setStudioName} maxLength={100} editable={!busy} />
+          <Field label="Studio join code" value={joinCode} onChangeText={setJoinCode} secureTextEntry autoCapitalize="none" autoCorrect={false} maxLength={256} editable={!busy} />
         </>}
         <Field label="Studio username" value={username} onChangeText={setUsername} autoCapitalize="none" autoCorrect={false} autoComplete="username" maxLength={40} editable={!busy} />
-        <Field label="Studio password" value={password} onChangeText={setPassword} secureTextEntry autoCapitalize="none" autoCorrect={false} autoComplete={register ? 'new-password' : 'current-password'} maxLength={128} editable={!busy} />
+        {pinMode ? <PinField label="4-digit studio PIN" value={password} onChange={setPassword} revealed={false} disabled={busy} />
+          : <Field label="Studio password" value={password} onChangeText={setPassword} secureTextEntry autoCapitalize="none" autoCorrect={false} autoComplete={register ? 'new-password' : 'current-password'} maxLength={128} editable={!busy} />}
         {error ? <ErrorMessage message={error} /> : null}
-        <Button title={register ? 'Create Studio' : 'Sign In'} onPress={submit} icon="arrow-right" loading={busy} disabled={busy} />
-        <Pressable accessibilityRole="button" disabled={busy} onPress={() => { setRegister(!register); setError(''); setPassword(''); }}>
-          <Text style={[ui.label, styles.centered]}>{register ? 'Already have an account? Sign in' : 'Create a studio account'}</Text>
+        <Button title={register ? 'Join Studio' : 'Sign In'} onPress={submit} icon="arrow-right" loading={busy} disabled={busy} />
+        <Pressable accessibilityRole="button" disabled={busy} onPress={() => { setRegister(!register); setError(''); setPassword(''); setJoinCode(''); }}>
+          <Text style={[ui.label, styles.centered]}>{register ? 'Already have an account? Sign in' : 'Join a studio'}</Text>
         </Pressable>
       </View>
     </Screen>
