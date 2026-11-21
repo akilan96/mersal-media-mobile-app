@@ -93,8 +93,26 @@ export function createDriveReader(env: Readonly<Record<string, string | undefine
   async function driveRequest(url: string, target: DriveTarget) {
     try {
       const response = await fetch(url, { headers: await headers(target), signal: AbortSignal.timeout(10000), redirect: 'error' });
+      if (response.status === 403) {
+        const payload = await response.json().catch(() => null) as {
+          error?: { errors?: { reason?: string }[]; details?: { reason?: string }[] };
+        } | null;
+        const reasons = [...(payload?.error?.errors ?? []), ...(payload?.error?.details ?? [])].map(item => item.reason);
+        if (reasons.some(reason => reason === 'accessNotConfigured' || reason === 'SERVICE_DISABLED')) {
+          throw new StoreError(503, 'Enable the Google Drive API in the Google Cloud project used by the studio.');
+        }
+        if (reasons.some(reason => reason === 'rateLimitExceeded' || reason === 'userRateLimitExceeded' || reason === 'dailyLimitExceeded')) {
+          throw new StoreError(429, 'Google Drive is limiting requests. Try again later.');
+        }
+        if (reasons.includes('domainPolicy')) {
+          throw new StoreError(403, 'The folder owner’s Google Workspace policy blocks this app’s access.');
+        }
+        if (reasons.some(reason => reason === 'insufficientPermissions' || reason === 'ACCESS_TOKEN_SCOPE_INSUFFICIENT')) {
+          throw new StoreError(503, 'The app’s Google credentials do not include Drive read access.');
+        }
+      }
       if (response.status === 403 || response.status === 404) {
-        throw new StoreError(403, 'The studio needs to grant the app access to this Drive gallery.');
+        throw new StoreError(403, 'Check the saved Drive link and share that exact folder with the studio’s service account as Viewer.');
       }
       if (!response.ok) throw new Error('Drive request failed');
       return response;
