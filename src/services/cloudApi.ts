@@ -1,5 +1,8 @@
-const value = process.env.EXPO_PUBLIC_API_URL?.trim();
-export const cloudApiUrl = value?.replace(/\/+$/, '');
+const deployedApiUrl = 'https://mersal-media-mobile-app.vercel.app/api/v1';
+const configuredApiUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
+export const cloudApiUrl = configuredApiUrl === 'local'
+  ? undefined
+  : (configuredApiUrl || deployedApiUrl).replace(/\/+$/, '');
 
 export class ApiRequestError extends Error {
   constructor(readonly status: number, message: string) { super(message); }
