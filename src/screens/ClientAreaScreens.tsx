@@ -4,19 +4,32 @@ import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Constants from 'expo-constants';
 import Feather from '@expo/vector-icons/Feather';
-import { Brand, Card, EmptyState, Header, IconButton, Screen } from '../components/ui';
+import { Brand, Card, Header, IconButton, Screen } from '../components/ui';
 import { AppearanceSetting } from '../components/AppearanceSetting';
 import { MetricCard } from '../components/MetricCard';
 import { useStudio } from '../state/StudioProvider';
 import { useStudioTheme } from '../theme';
 import { greeting, money } from '../domain/helpers';
-import type { ClientPaymentSummary } from '../domain/types';
+import type { ClientPaymentSummary, ClientPhotoSummary } from '../domain/types';
+import { ClientGalleryScreen } from './ClientPhotosScreen';
 
 export function ClientHomeScreen() {
-  const { accountName, loadClientPayments } = useStudio();
+  const { accountName, loadClientPayments, loadClientPhotoSummary, galleryChange } = useStudio();
   const { colors, ui, themeName } = useStudioTheme();
   const [payments, setPayments] = useState<ClientPaymentSummary | null>();
   const [paymentError, setPaymentError] = useState(false);
+  const [photos, setPhotos] = useState<ClientPhotoSummary>();
+  const [photoError, setPhotoError] = useState(false);
+  useFocusEffect(useCallback(() => {
+    let active = true;
+    setPhotoError(false);
+    void loadClientPhotoSummary?.().then(summary => {
+      if (active) setPhotos(summary);
+    }).catch(() => {
+      if (active) setPhotoError(true);
+    });
+    return () => { active = false; };
+  }, [loadClientPhotoSummary, galleryChange]));
   useFocusEffect(useCallback(() => {
     let active = true;
     if (loadClientPayments) {
@@ -38,8 +51,8 @@ export function ClientHomeScreen() {
       <Text accessibilityRole="header" style={ui.title}>{accountName ? `${accountName}!` : 'Welcome!'}</Text>
     </View>
     <View style={styles.photoMetrics}>
-      <MetricCard label="Total Photos" value={0} caption="In your gallery" icon="image" tone="mint" />
-      <MetricCard label="Selected Photos" value={0} caption="Your picks" icon="check-circle" tone="blue" />
+      <MetricCard label="Total Photos" value={photos?.total ?? '—'} caption={photoError ? 'Could not refresh' : 'In your gallery'} icon="image" tone="mint" />
+      <MetricCard label="Selected Photos" value={photos?.selected ?? '—'} caption={photoError ? 'Could not refresh' : 'Your picks'} icon="check-circle" tone="blue" />
       <MetricCard label="Total Payment" value={payments ? money(payments.total) : '—'} caption={caption || 'Booking total'} icon="credit-card" tone="teal" />
       <MetricCard label="Pending Payment" value={payments ? money(payments.pending) : '—'} caption={caption || 'Balance due'} icon="clock" tone="gold" />
     </View>
@@ -57,10 +70,7 @@ export function ClientHomeScreen() {
 }
 
 export function ClientFavouritesScreen() {
-  return <Screen>
-    <Header title="Favourites" />
-    <EmptyState icon="heart" title="No favourites yet" description="Photos you mark as favourites will appear here." />
-  </Screen>;
+  return <ClientGalleryScreen favourites />;
 }
 
 export function ClientSettingsScreen() {

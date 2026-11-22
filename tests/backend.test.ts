@@ -246,6 +246,15 @@ test('owner creates admin and client accounts while clients cannot access studio
       return true;
     },
   }, express(), { pinMode: true, ownerUsername: 'aki', drive: {
+    async summary(link) {
+      assert.equal(link, driveLink);
+      return { photos: ['preview'], selected: ['selected'] };
+    },
+    async setFavourite(link, fileId, selected) {
+      assert.equal(link, driveLink);
+      assert.equal(fileId, 'preview');
+      assert.equal(selected, true);
+    },
     async list(link) {
       assert.equal(link, driveLink);
       driveReads++;
@@ -306,6 +315,9 @@ test('owner creates admin and client accounts while clients cannot access studio
         assert.equal((await request(galleryPath + '/' + galleryId + '/photos', 'GET', token)).status, 200);
         assert.equal((await request(galleryPath + '/' + galleryId + '/photos/preview/thumbnail', 'GET', token)).status, 200);
         assert.equal(driveReads, 2);
+        assert.deepEqual(await (await request('/client/photo-summary', 'GET', token)).json(), { total: 2, selected: 1 });
+        assert.equal((await request(galleryPath + '/' + otherGalleryId + '/photos/preview/favourite', 'PUT', token, { selected: true })).status, 404);
+        assert.equal((await request(galleryPath + '/' + galleryId + '/photos/preview/favourite', 'PUT', token, { selected: true })).status, 204);
         for (const path of ['/studio', '/clients', '/settings', '/settings/home-photo', '/dashboard', '/profile']) {
           assert.equal((await request(path, 'GET', token)).status, 403, path);
         }

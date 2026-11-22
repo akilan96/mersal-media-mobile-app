@@ -5,7 +5,8 @@ import { StoreError } from './store';
 import { drivePhotoPageSize } from '../src/domain/types';
 
 const googleApi = 'https://www.googleapis.com/drive/v3/files';
-const driveScope = 'https://www.googleapis.com/auth/drive.readonly';
+const driveScope = 'https://www.googleapis.com/auth/drive';
+const folderMime = 'application/vnd.google-apps.folder';
 const idPattern = /^[a-zA-Z0-9_-]{1,256}$/;
 const photoMime = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif', 'image/heic', 'image/heif']);
 type DriveItem = { id: string; name: string; mimeType: string; parents?: string[]; thumbnailLink?: string; trashed?: boolean };
@@ -91,9 +92,9 @@ export function createDriveReader(env: Readonly<Record<string, string | undefine
     };
   }
 
-  async function driveRequest(url: string, target: DriveTarget) {
+  async function driveRequest(url: string, target: DriveTarget, method = 'GET') {
     try {
-      const response = await fetch(url, { headers: await headers(target), signal: AbortSignal.timeout(10000), redirect: 'error' });
+      const response = await fetch(url, { method, headers: await headers(target), signal: AbortSignal.timeout(10000), redirect: 'error' });
       if (response.status === 403) {
         const payload = await response.json().catch(() => null) as {
           error?: { errors?: { reason?: string }[]; details?: { reason?: string }[] };
@@ -113,6 +114,7 @@ export function createDriveReader(env: Readonly<Record<string, string | undefine
         }
       }
       if (response.status === 403 || response.status === 404) {
+        if (method === 'PATCH') throw new StoreError(403, 'The studio’s Drive account needs permission to move photos between these folders.');
         throw new StoreError(403, 'Check the saved Drive link and share that exact folder with the studio’s service account as Viewer.');
       }
       if (!response.ok) throw new Error('Drive request failed');
@@ -133,45 +135,118 @@ export function createDriveReader(env: Readonly<Record<string, string | undefine
   const isPhoto = (item: DriveItem) => !item.trashed && photoMime.has(item.mimeType);
   const view = (item: DriveItem) => ({ id: item.id, name: item.name, hasThumbnail: Boolean(item.thumbnailLink) });
 
+  async function children(target: DriveTarget, parent: string, filter: string, fields: string, pageSize: number, pageToken?: string) {
+    const query = new URLSearchParams({
+      q: "'" + parent + "' in parents and trashed = false and (" + filter + ')',
+      fields: 'nextPageToken,incompleteSearch,files(' + fields + ')', orderBy: 'name_natural', pageSize: String(pageSize),
+      supportsAllDrives: 'true', includeItemsFromAllDrives: 'true',
+    });
+    if (pageToken) query.set('pageToken', pageToken);
+    const result = await (await driveRequest(googleApi + '?' + query, target)).json() as {
+      files: DriveItem[]; nextPageToken?: string; incompleteSearch?: boolean;
+    };
+    if (result.incompleteSearch) throw new StoreError(502, 'Google Drive returned an incomplete result. Try again.');
+    return result;
+  }
+  const photoFilter = [...photoMime].map(mime => "mimeType = '" + mime + "'").join(' or ');
+
+  async function favouritesFolder(target: DriveTarget) {
+    const filter = "mimeType = '" + folderMime + "' and name = 'Favourites'";
+    const result = await children(target, target.id, filter, 'id', 2);
+    if (result.files.length > 1 || result.nextPageToken) {
+      throw new StoreError(409, 'The studio must keep just one Favourites folder in this gallery.');
+    }
+    return result.files[0]?.id;
+  }
+
+  async function photoIds(target: DriveTarget, parent: string) {
+    const ids: string[] = [];
+    let token: string | undefined;
+    do {
+      const page = await children(target, parent, photoFilter, 'id', 1000, token);
+      ids.push(...page.files.map(file => file.id));
+      token = page.nextPageToken;
+    } while (token);
+    return ids;
+  }
+
   return {
-    async list(link: string, pageToken?: string) {
+    async summary(link: string) {
+      const target = driveTarget(link);
+      const root = await metadata(target.id, target);
+      if (root.mimeType !== folderMime || root.trashed) return { photos: isPhoto(root) ? [root.id] : [], selected: [] };
+      const [photos, favourites] = await Promise.all([photoIds(target, target.id), favouritesFolder(target)]);
+      return { photos, selected: favourites ? await photoIds(target, favourites) : [] };
+    },
+    async setFavourite(link: string, fileId: string, selected: boolean) {
+      const target = driveTarget(link);
+      if (target.kind === 'file' || fileId === target.id) throw new StoreError(422, 'Favourites require a Drive folder gallery.');
+      const [file, folder] = await Promise.all([metadata(fileId, target), favouritesFolder(target)]);
+      const inGallery = file.parents?.includes(target.id);
+      const inFavourites = !!folder && file.parents?.includes(folder);
+      if (!isPhoto(file) || (!inGallery && !inFavourites)) throw new StoreError(404, 'Photo not found in this gallery.');
+      if (!folder) throw new StoreError(409, 'Ask the studio to create a Favourites folder inside this Drive gallery.');
+      if (selected ? inFavourites : inGallery) return;
+      const query = new URLSearchParams({
+        addParents: selected ? folder : target.id, removeParents: selected ? target.id : folder,
+        supportsAllDrives: 'true', fields: 'id',
+      });
+      await driveRequest(googleApi + '/' + file.id + '?' + query, target, 'PATCH');
+    },
+    async list(link: string, pageToken?: string, favourites = false) {
       const target = driveTarget(link);
       if (!pageToken || target.kind !== 'folder') {
         const root = await metadata(target.id, target);
         if (root.trashed) throw new StoreError(404, 'This Drive gallery is no longer available.');
-        if (root.mimeType !== 'application/vnd.google-apps.folder') {
-          return { photos: isPhoto(root) ? [view(root)] : [], nextPageToken: undefined };
+        if (root.mimeType !== folderMime) {
+          return { photos: !favourites && isPhoto(root) ? [view(root)] : [], nextPageToken: undefined };
         }
       }
-      const query = new URLSearchParams({
-        q: "'" + target.id + "' in parents and trashed = false and (" +
-          [...photoMime].map(mime => "mimeType = '" + mime + "'").join(' or ') + ')',
-        fields: 'nextPageToken,files(' + itemFields + ')', orderBy: 'name_natural', pageSize: String(drivePhotoPageSize),
-        supportsAllDrives: 'true', includeItemsFromAllDrives: 'true',
-      });
-      if (pageToken) query.set('pageToken', pageToken);
-      const result = await (await driveRequest(googleApi + '?' + query, target)).json() as { files: DriveItem[]; nextPageToken?: string };
+      const parent = favourites ? await favouritesFolder(target) : target.id;
+      if (!parent) return { photos: [], nextPageToken: undefined };
+      const result = await children(target, parent, photoFilter, itemFields, drivePhotoPageSize, pageToken);
       return { photos: result.files.filter(isPhoto).map(view), nextPageToken: result.nextPageToken };
     },
-    async thumbnail(link: string, fileId: string) {
+    async thumbnail(link: string, fileId: string, large = false) {
       const target = driveTarget(link);
       if (target.kind === 'file' && target.id !== fileId) throw new StoreError(404, 'Photo not found.');
       const file = await metadata(fileId, target);
-      if (!isPhoto(file) || (target.id !== fileId && !file.parents?.includes(target.id)) || !file.thumbnailLink) {
+      let allowed = target.id === fileId || file.parents?.includes(target.id);
+      if (!allowed && target.kind !== 'file') {
+        const folder = await favouritesFolder(target);
+        allowed = !!folder && file.parents?.includes(folder);
+      }
+      if (!isPhoto(file) || !allowed) {
         throw new StoreError(404, 'Photo preview not found.');
       }
-      const url = new URL(file.thumbnailLink);
-      if (url.protocol !== 'https:' || !url.hostname.endsWith('.googleusercontent.com')) {
-        throw new StoreError(502, 'Could not load this photo preview.');
+      const maxBytes = 4 * 1024 * 1024;
+      async function readImage(response: Response) {
+        const contentType = response.headers.get('content-type')?.split(';')[0] ?? '';
+        if (!photoMime.has(contentType) || Number(response.headers.get('content-length')) > maxBytes || !response.body) {
+          await response.body?.cancel();
+          throw new StoreError(422, 'This photo preview is unavailable. Open the gallery in Google Drive.');
+        }
+        const chunks: Buffer[] = [];
+        let size = 0;
+        for await (const chunk of response.body) {
+          size += chunk.byteLength;
+          if (size > maxBytes) throw new StoreError(422, 'This photo preview is too large. Open the gallery in Google Drive.');
+          chunks.push(Buffer.from(chunk));
+        }
+        return { contentType, bytes: Buffer.concat(chunks) };
       }
-      const response = await driveRequest(url.href, target);
-      const contentType = response.headers.get('content-type')?.split(';')[0] ?? '';
-      if (!photoMime.has(contentType) || Number(response.headers.get('content-length')) > 2 * 1024 * 1024) {
-        throw new StoreError(502, 'Could not load this photo preview.');
+      if (file.thumbnailLink) {
+        const url = new URL(file.thumbnailLink);
+        if (url.protocol === 'https:' && url.hostname.endsWith('.googleusercontent.com')) {
+          if (large) url.pathname = url.pathname.replace(/=s\d+$/, '=s1600');
+          try {
+            return await readImage(await driveRequest(url.href, target));
+          } catch {
+            // Drive can return expired or unavailable thumbnail URLs.
+          }
+        }
       }
-      const bytes = Buffer.from(await response.arrayBuffer());
-      if (bytes.length > 2 * 1024 * 1024) throw new StoreError(502, 'This photo preview is too large.');
-      return { contentType, bytes };
+      return readImage(await driveRequest(googleApi + '/' + file.id + '?alt=media&supportsAllDrives=true', target));
     },
   };
 }

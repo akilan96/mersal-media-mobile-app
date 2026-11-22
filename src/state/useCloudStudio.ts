@@ -8,7 +8,7 @@ import { apiRequest, ApiRequestError, cloudApiUrl } from '../services/cloudApi';
 import { emptyStudio } from '../services/repository';
 import { assertStudioData } from '../domain/validation';
 import type { StudioContext } from './StudioProvider';
-import type { AccountRole, ClientGalleryList, ClientPaymentSummary, DrivePhotoPage, ManagedAccount, StudioEvent, ThemeName } from '../domain/types';
+import type { AccountRole, ClientGalleryList, ClientPaymentSummary, ClientPhotoSummary, DrivePhotoPage, ManagedAccount, StudioEvent, ThemeName } from '../domain/types';
 import { settingsThemes } from '../theme';
 
 const sessionKey = 'mersal.cloud.session.v1';
@@ -54,6 +54,7 @@ export function useCloudStudio(): StudioContext {
   const [storageError, setStorageError] = useState<string | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [galleryChange, setGalleryChange] = useState<{ id: string }>();
   const session = useRef<Session | null>(null);
   const latest = useRef(emptyStudio);
   const queue = useRef<Promise<unknown>>(Promise.resolve());
@@ -238,18 +239,36 @@ export function useCloudStudio(): StudioContext {
     return await response.json() as ClientGalleryList;
   }, []);
 
-  const loadGalleryPhotos = useCallback(async (galleryId: string, pageToken?: string) => {
+  const loadGalleryPhotos = useCallback(async (galleryId: string, pageToken?: string, favourites?: boolean) => {
     const active = session.current;
     if (!active) throw new Error('Sign in to continue.');
-    const query = pageToken ? '?pageToken=' + encodeURIComponent(pageToken) : '';
-    const response = await apiRequest('/client/galleries/' + encodeURIComponent(galleryId) + '/photos' + query, { token: active.token });
+    const query = new URLSearchParams();
+    if (pageToken) query.set('pageToken', pageToken);
+    if (favourites) query.set('favourites', 'true');
+    const response = await apiRequest('/client/galleries/' + encodeURIComponent(galleryId) + '/photos?' + query, { token: active.token });
     return await response.json() as DrivePhotoPage;
   }, []);
 
-  function galleryThumbnail(galleryId: string, photoId: string) {
+  const loadClientPhotoSummary = useCallback(async () => {
+    const active = session.current;
+    if (!active) throw new Error('Sign in to continue.');
+    const response = await apiRequest('/client/photo-summary', { token: active.token });
+    return await response.json() as ClientPhotoSummary;
+  }, []);
+
+  async function setGalleryFavourite(galleryId: string, photoId: string, selected: boolean) {
+    const active = session.current;
+    if (!active) throw new Error('Sign in to continue.');
+    await apiRequest('/client/galleries/' + encodeURIComponent(galleryId) + '/photos/' + encodeURIComponent(photoId) + '/favourite', {
+      method: 'PUT', token: active.token, json: { selected },
+    });
+    if (session.current === active) setGalleryChange({ id: galleryId });
+  }
+
+  function galleryThumbnail(galleryId: string, photoId: string, large?: boolean) {
     const active = session.current;
     if (!active || !cloudApiUrl) return;
-    const uri = cloudApiUrl + '/client/galleries/' + encodeURIComponent(galleryId) + '/photos/' + encodeURIComponent(photoId) + '/thumbnail';
+    const uri = cloudApiUrl + '/client/galleries/' + encodeURIComponent(galleryId) + '/photos/' + encodeURIComponent(photoId) + '/thumbnail' + (large ? '?size=large' : '');
     let cacheSession = thumbnailSessions.get(active);
     if (cacheSession === undefined) {
       cacheSession = randomUUID();
@@ -266,7 +285,7 @@ export function useCloudStudio(): StudioContext {
     cloud: true, configured: true, data, authenticated, role, accountName,
     deviceTheme: authenticated ? deviceThemes[themeScope] : undefined,
     loading, storageError, authError, busy, retryLoad, listAccounts, loadClientPayments,
-    loadClientGalleries, loadGalleryPhotos, galleryThumbnail,
+    loadClientGalleries, loadGalleryPhotos, galleryThumbnail, loadClientPhotoSummary, setGalleryFavourite, galleryChange,
     async linkClientAccount(username, clientId) {
       const active = session.current;
       if (!active) throw new Error('Sign in to continue.');

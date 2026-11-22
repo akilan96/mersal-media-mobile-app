@@ -134,7 +134,8 @@ export function createExpressApi(store: StudioStore, app = express(), sharedSign
       res.locals.clientId = account.clientId;
       res.locals.studioId = 'shared';
       const galleryRead = /^\/client\/galleries(?:\/[^/]+\/photos(?:\/[^/]+\/thumbnail)?)?$/.test(req.path);
-      if (role === 'client' && !(req.method === 'GET' && (galleryRead || ['/auth/me', '/client/payment-summary'].includes(req.path)))
+      const favouriteWrite = req.method === 'PUT' && /^\/client\/galleries\/[^/]+\/photos\/[^/]+\/favourite$/.test(req.path);
+      if (role === 'client' && !favouriteWrite && !(req.method === 'GET' && (galleryRead || ['/auth/me', '/client/payment-summary', '/client/photo-summary'].includes(req.path)))
         && !(req.method === 'POST' && req.path === '/auth/logout')) {
         throw new ApiError(403, 'This account can only access the client area.');
       }
@@ -200,18 +201,39 @@ export function createExpressApi(store: StudioStore, app = express(), sharedSign
     const galleries = (await clientGalleries(res)).map(({ id, driveLink, createdAt }) => ({ id, driveLink, createdAt }));
     res.json({ galleries, previewsEnabled: Boolean(sharedSignup?.drive) });
   });
+  api.get('/client/photo-summary', async (_req, res) => {
+    const galleries = await clientGalleries(res);
+    const drive = sharedSignup?.drive;
+    if (galleries.length && !drive) throw new ApiError(503, 'In-app Drive previews are not configured.');
+    const photos = new Set<string>();
+    const selected = new Set<string>();
+    for (const { driveLink } of galleries) {
+      const summary = await drive!.summary(driveLink);
+      for (const id of summary.photos) photos.add(id);
+      for (const id of summary.selected) { photos.add(id); selected.add(id); }
+    }
+    res.json({ total: photos.size, selected: selected.size });
+  });
   api.get('/client/galleries/:id/photos', async (req, res) => {
     const gallery = await clientGallery(res, req.params.id);
     const pageToken = z.string().max(4096).optional().parse(req.query.pageToken);
     const drive = sharedSignup?.drive;
     if (!drive) throw new ApiError(503, 'In-app Drive previews are not configured.');
-    res.json(await drive.list(gallery.driveLink, pageToken));
+    res.json(await drive.list(gallery.driveLink, pageToken, req.query.favourites === 'true'));
+  });
+  api.put('/client/galleries/:id/photos/:fileId/favourite', async (req, res) => {
+    const gallery = await clientGallery(res, req.params.id);
+    const { selected } = z.object({ selected: z.boolean() }).parse(req.body);
+    const drive = sharedSignup?.drive;
+    if (!drive) throw new ApiError(503, 'In-app Drive previews are not configured.');
+    await drive.setFavourite(gallery.driveLink, req.params.fileId, selected);
+    res.sendStatus(204);
   });
   api.get('/client/galleries/:id/photos/:fileId/thumbnail', async (req, res) => {
     const gallery = await clientGallery(res, req.params.id);
     const drive = sharedSignup?.drive;
     if (!drive) throw new ApiError(503, 'In-app Drive previews are not configured.');
-    const photo = await drive.thumbnail(gallery.driveLink, req.params.fileId);
+    const photo = await drive.thumbnail(gallery.driveLink, req.params.fileId, req.query.size === 'large');
     res.set('X-Content-Type-Options', 'nosniff').type(photo.contentType).send(photo.bytes);
   });
   api.get('/client/payment-summary', async (_req, res) => {

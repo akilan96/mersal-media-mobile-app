@@ -51,7 +51,7 @@ Run `npm test` to exercise the API over HTTP against a disposable SQLite file. T
 5. Deploy the backend and request `GET /api/v1/health` to initialize the collections and confirm Atlas connectivity.
 6. Reload the updated app. Sign in as the owner and use **Settings → Accounts** to create admins and clients. Public registration is disabled on Atlas. Existing non-owner accounts without a stored role have client access.
 
-Atlas stores usernames, four-digit PINs, and roles in `auth`, events in `events`, client records in `clients`, and receipts in `payments` with an `eventId` link. `studio_workspace` stores shared settings and the revision. Owners and admins share studio access. Only the owner can list or create accounts. Clients see Home, Photos, Favourites, and Settings. Photo selection and favourites persistence are planned separately. Writes use a transaction and revision check to keep linked records consistent.
+Atlas stores usernames, four-digit PINs, and roles in `auth`, events in `events`, client records in `clients`, and receipts in `payments` with an `eventId` link. `studio_workspace` stores shared settings and the revision. Owners and admins share studio access. Only the owner can list or create accounts. Clients see Home, Photos, Favourites, and Settings. Studio data writes use a transaction and revision check to keep linked records consistent.
 
 The staff Photos tab reads its gallery list from `GET /api/v1/studio`. Staff create a gallery with `POST /api/v1/photo-galleries` using an existing `clientId` and an HTTPS Google Drive `driveLink`. Links are stored in the workspace. Adding a link does not change its permissions in Google Drive.
 
@@ -59,7 +59,9 @@ The staff Photos tab reads its gallery list from `GET /api/v1/studio`. Staff cre
 
 In **Settings → Accounts** choose **Link client** for the client login and select the same client record used for the gallery in the staff Photos tab. The client Photos tab lists only galleries for that linked record. The client API resolves the record from the signed-in session, and checks the link again on photo and thumbnail requests.
 
-The app lists image files directly inside shared folders and requests thumbnails through the API. **Open in Google Drive** uses the folder's existing Google sharing permissions.
+The app lists supported image files directly inside each gallery folder and its `Favourites` subfolder. Home counts both locations and counts each photo once. The preview API tries the Drive thumbnail first and can serve the original if it fits within the preview size limit. **Open in Google Drive** uses the folder's existing sharing permissions.
+
+For selections, create one subfolder named exactly `Favourites` inside each gallery folder. Give the backend’s Drive service account permission to move items between those two folders, including for any files with separate permissions. The API uses the Drive read/write scope and checks that the photo belongs to the signed-in client's linked gallery. Selecting a photo moves it into `Favourites`, and removing the selection moves it back to the gallery. Use a separate gallery folder for each client.
 
 #### Keyless setup on Vercel
 
