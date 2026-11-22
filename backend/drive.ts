@@ -150,6 +150,21 @@ export function createDriveReader(env: Readonly<Record<string, string | undefine
   }
   const photoFilter = [...photoMime].map(mime => "mimeType = '" + mime + "'").join(' or ');
 
+  async function photoInFolder(target: DriveTarget, folderId: string, photo: DriveItem) {
+    if (photo.parents?.includes(folderId)) return photo;
+    if (photo.parents?.length) return undefined;
+    // A folder query can confirm membership when Drive omits parents from file metadata.
+    const escaped = photo.name.replace(/['\\]/g, '\\$&');
+    let token: string | undefined;
+    do {
+      const page = await children(target, folderId, "name = '" + escaped + "' and mimeType = '" + photo.mimeType + "'", itemFields, 100, token);
+      const match = page.files.find(item => item.id === photo.id && isPhoto(item));
+      if (match) return match;
+      token = page.nextPageToken;
+    } while (token);
+    return undefined;
+  }
+
   async function favouritesFolder(target: DriveTarget) {
     const filter = "mimeType = '" + folderMime + "' and name = 'Favourites'";
     const result = await children(target, target.id, filter, 'id', 2);
@@ -182,9 +197,10 @@ export function createDriveReader(env: Readonly<Record<string, string | undefine
       const target = driveTarget(link);
       if (target.kind === 'file' || fileId === target.id) throw new StoreError(422, 'Favourites require a Drive folder gallery.');
       const [file, folder] = await Promise.all([metadata(fileId, target), favouritesFolder(target)]);
-      const inGallery = file.parents?.includes(target.id);
-      const inFavourites = !!folder && file.parents?.includes(folder);
-      if (!isPhoto(file) || (!inGallery && !inFavourites)) throw new StoreError(404, 'Photo not found in this gallery.');
+      if (!isPhoto(file)) throw new StoreError(404, 'Photo not found in this gallery.');
+      const inGallery = await photoInFolder(target, target.id, file);
+      const inFavourites = !inGallery && folder ? await photoInFolder(target, folder, file) : undefined;
+      if (!inGallery && !inFavourites) throw new StoreError(404, 'Photo not found in this gallery.');
       if (!folder) throw new StoreError(409, 'Ask the studio to create a Favourites folder inside this Drive gallery.');
       if (selected ? inFavourites : inGallery) return;
       const query = new URLSearchParams({
@@ -210,13 +226,14 @@ export function createDriveReader(env: Readonly<Record<string, string | undefine
     async thumbnail(link: string, fileId: string, large = false) {
       const target = driveTarget(link);
       if (target.kind === 'file' && target.id !== fileId) throw new StoreError(404, 'Photo not found.');
-      const file = await metadata(fileId, target);
-      let allowed = target.id === fileId || file.parents?.includes(target.id);
-      if (!allowed && target.kind !== 'file') {
+      const metadataFile = await metadata(fileId, target);
+      if (!isPhoto(metadataFile)) throw new StoreError(404, 'Photo preview not found.');
+      let file = target.id === fileId ? metadataFile : await photoInFolder(target, target.id, metadataFile);
+      if (!file && target.kind !== 'file') {
         const folder = await favouritesFolder(target);
-        allowed = !!folder && file.parents?.includes(folder);
+        if (folder) file = await photoInFolder(target, folder, metadataFile);
       }
-      if (!isPhoto(file) || !allowed) {
+      if (!file) {
         throw new StoreError(404, 'Photo preview not found.');
       }
       const maxBytes = 4 * 1024 * 1024;
@@ -235,8 +252,9 @@ export function createDriveReader(env: Readonly<Record<string, string | undefine
         }
         return { contentType, bytes: Buffer.concat(chunks) };
       }
-      if (file.thumbnailLink) {
-        const url = new URL(file.thumbnailLink);
+      const thumbnailLink = file.thumbnailLink ?? metadataFile.thumbnailLink;
+      if (thumbnailLink) {
+        const url = new URL(thumbnailLink);
         if (url.protocol === 'https:' && url.hostname.endsWith('.googleusercontent.com')) {
           if (large) url.pathname = url.pathname.replace(/=s\d+$/, '=s1600');
           try {

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { generateKeyPairSync } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { once } from 'node:events';
 import { tmpdir } from 'node:os';
@@ -19,6 +20,35 @@ test('Drive previews can initialize using federation without a service-account k
   });
   assert.equal(typeof reader?.list, 'function');
   assert.equal(typeof reader?.thumbnail, 'function');
+});
+
+test('Drive thumbnails verify folder membership when file metadata omits parents', async t => {
+  const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048, privateKeyEncoding: { type: 'pkcs8', format: 'pem' }, publicKeyEncoding: { type: 'spki', format: 'pem' } });
+  const photo = { id: 'photo', mimeType: 'image/jpeg', name: "Client's photo.JPG" };
+  let thumbnailRequests = 0;
+  t.mock.method(globalThis, 'fetch', async (input: string) => {
+    const url = new URL(input);
+    if (url.hostname === 'oauth2.googleapis.com') return Response.json({ access_token: 'fake-token' });
+    if (url.hostname === 'lh3.googleusercontent.com') {
+      thumbnailRequests++;
+      return new Response('JPEG', { headers: { 'Content-Type': 'image/jpeg' } });
+    }
+    if (url.pathname.endsWith('/photo')) return Response.json(photo);
+    if (url.pathname.endsWith('/other')) return Response.json({ ...photo, id: 'other' });
+    assert.equal(url.pathname, '/drive/v3/files');
+    const query = url.searchParams.get('q') ?? '';
+    assert.ok(query.startsWith("'gallery' in parents"));
+    if (query.includes("name = 'Favourites'")) return Response.json({ files: [] });
+    assert.ok(query.includes("name = 'Client\\'s photo.JPG'"));
+    return Response.json({ files: [{ ...photo, thumbnailLink: 'https://lh3.googleusercontent.com/photo=s220' }] });
+  });
+  const drive = createDriveReader({ GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON: JSON.stringify({ private_key: privateKey, client_email: 'reader@example.com' }) })!;
+  const link = 'https://drive.google.com/drive/folders/gallery';
+  const preview = await drive.thumbnail(link, 'photo');
+  assert.equal(preview.contentType, 'image/jpeg');
+  assert.equal(preview.bytes.toString(), 'JPEG');
+  await assert.rejects(drive.thumbnail(link, 'other'), { status: 404 });
+  assert.equal(thumbnailRequests, 1);
 });
 
 test('studio API persists private data and validates event and client workflows', async () => {
