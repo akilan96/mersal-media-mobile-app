@@ -2,6 +2,7 @@ import { createSign } from 'node:crypto';
 import { getVercelOidcToken } from '@vercel/oidc';
 import { IdentityPoolClient } from 'google-auth-library';
 import { StoreError } from './store';
+import { drivePhotoPageSize } from '../src/domain/types';
 
 const googleApi = 'https://www.googleapis.com/drive/v3/files';
 const driveScope = 'https://www.googleapis.com/auth/drive.readonly';
@@ -135,14 +136,17 @@ export function createDriveReader(env: Readonly<Record<string, string | undefine
   return {
     async list(link: string, pageToken?: string) {
       const target = driveTarget(link);
-      const root = await metadata(target.id, target);
-      if (root.trashed) throw new StoreError(404, 'This Drive gallery is no longer available.');
-      if (root.mimeType !== 'application/vnd.google-apps.folder') {
-        return { photos: isPhoto(root) ? [view(root)] : [], nextPageToken: undefined };
+      if (!pageToken || target.kind !== 'folder') {
+        const root = await metadata(target.id, target);
+        if (root.trashed) throw new StoreError(404, 'This Drive gallery is no longer available.');
+        if (root.mimeType !== 'application/vnd.google-apps.folder') {
+          return { photos: isPhoto(root) ? [view(root)] : [], nextPageToken: undefined };
+        }
       }
       const query = new URLSearchParams({
-        q: "'" + target.id + "' in parents and trashed = false and mimeType contains 'image/'",
-        fields: 'nextPageToken,files(' + itemFields + ')', orderBy: 'name_natural', pageSize: '30',
+        q: "'" + target.id + "' in parents and trashed = false and (" +
+          [...photoMime].map(mime => "mimeType = '" + mime + "'").join(' or ') + ')',
+        fields: 'nextPageToken,files(' + itemFields + ')', orderBy: 'name_natural', pageSize: String(drivePhotoPageSize),
         supportsAllDrives: 'true', includeItemsFromAllDrives: 'true',
       });
       if (pageToken) query.set('pageToken', pageToken);

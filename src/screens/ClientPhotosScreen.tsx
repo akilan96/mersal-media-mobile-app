@@ -1,13 +1,14 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Linking, StyleSheet, Text, View } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
 import { Image } from 'expo-image';
 import Feather from '@expo/vector-icons/Feather';
 import { Button, Card, EmptyState, ErrorMessage, Header, Screen } from '../components/ui';
-import type { ClientGallery, ClientGalleryList, DrivePhoto } from '../domain/types';
+import { drivePhotoPageSize, type ClientGallery, type ClientGalleryList, type DrivePhoto } from '../domain/types';
 import { formatDate } from '../domain/helpers';
 import { useStudio } from '../state/StudioProvider';
 import { useStudioTheme } from '../theme';
+
+type CachedGallery = { photos: DrivePhoto[]; shown: number; nextPage?: string };
 
 export function ClientPhotosScreen() {
   const { loadClientGalleries } = useStudio();
@@ -17,8 +18,9 @@ export function ClientPhotosScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [retry, setRetry] = useState(0);
+  const [galleryCache] = useState(() => new Map<string, CachedGallery>());
 
-  useFocusEffect(useCallback(() => {
+  useEffect(() => {
     let active = true;
     setLoading(true);
     setError('');
@@ -29,20 +31,23 @@ export function ClientPhotosScreen() {
     }
     void loadClientGalleries().then(result => {
       if (!active) return;
+      for (const id of galleryCache.keys()) {
+        if (!result.galleries.some(gallery => gallery.id === id)) galleryCache.delete(id);
+      }
       setList(result);
       setSelectedId(previous => result.galleries.some(gallery => gallery.id === previous) ? previous
         : result.galleries.length === 1 ? result.galleries[0].id : null);
     }).catch(() => {
-      if (active) { setList(null); setSelectedId(null); setError('Your galleries could not be loaded. Please try again.'); }
+      if (active) { galleryCache.clear(); setList(null); setSelectedId(null); setError('Your galleries could not be loaded. Please try again.'); }
     }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [loadClientGalleries, retry]));
+  }, [galleryCache, loadClientGalleries, retry]);
 
   const selected = !loading && list?.galleries.find(gallery => gallery.id === selectedId);
   if (selected && list) return <GalleryPreview key={selected.id} gallery={selected}
-    previewsEnabled={list.previewsEnabled} onBack={() => setSelectedId(null)} />;
+    cache={galleryCache} previewsEnabled={list.previewsEnabled} onBack={() => setSelectedId(null)} />;
 
-  return <Screen>
+  return <Screen refreshing={loading && list !== null} onRefresh={() => setRetry(value => value + 1)}>
     <Header title="Photos" />
     {loading ? <ActivityIndicator color={colors.primary} accessibilityLabel="Loading your galleries" />
       : error ? <View style={ui.gap}><ErrorMessage message={error} /><Button title="Retry" variant="secondary" onPress={() => setRetry(value => value + 1)} /></View>
@@ -54,31 +59,53 @@ export function ClientPhotosScreen() {
   </Screen>;
 }
 
-function GalleryPreview({ gallery, previewsEnabled, onBack }: { gallery: ClientGallery; previewsEnabled: boolean; onBack: () => void }) {
+function GalleryPreview({ gallery, previewsEnabled, onBack, cache }: {
+  gallery: ClientGallery; previewsEnabled: boolean; onBack: () => void; cache: Map<string, CachedGallery>;
+}) {
   const { loadGalleryPhotos, galleryThumbnail } = useStudio();
   const { colors, ui } = useStudioTheme();
-  const [photos, setPhotos] = useState<DrivePhoto[]>([]);
-  const [nextPage, setNextPage] = useState<string>();
-  const [pageRequest, setPageRequest] = useState<{ token?: string }>({});
-  const [loading, setLoading] = useState(previewsEnabled);
+  const [cached, setCached] = useState(() => cache.get(gallery.id));
+  const [requestedCount, setRequestedCount] = useState<number | null>(() => previewsEnabled && !cache.has(gallery.id) ? drivePhotoPageSize : null);
   const [error, setError] = useState('');
   const [linkError, setLinkError] = useState('');
+  const loading = requestedCount !== null;
+  const shown = cached?.shown ?? 0;
+  const photos = cached?.photos.slice(0, shown) ?? [];
+  const hasMore = !!cached && (shown < cached.photos.length || !!cached.nextPage);
 
   useEffect(() => {
-    if (!previewsEnabled || !loadGalleryPhotos) return;
+    if (!previewsEnabled || !loadGalleryPhotos || requestedCount === null) return;
     let active = true;
-    setLoading(true); setError('');
-    void loadGalleryPhotos(gallery.id, pageRequest.token).then(page => {
+    const target = requestedCount;
+    const load = loadGalleryPhotos;
+    setError('');
+    void (async () => {
+      const saved = cache.get(gallery.id);
+      const items = [...(saved?.photos ?? [])];
+      const ids = new Set(items.map(photo => photo.id));
+      let nextPage = saved?.nextPage;
+      // Drive can return a short page with a continuation token.
+      for (let attempt = 0; active && items.length < target && attempt < drivePhotoPageSize; attempt++) {
+        if (!nextPage && (saved || attempt > 0)) break;
+        const page = await load(gallery.id, nextPage);
+        for (const photo of page.photos) {
+          if (!ids.has(photo.id)) {
+            ids.add(photo.id);
+            items.push(photo);
+          }
+        }
+        if (page.nextPageToken === nextPage) { nextPage = undefined; break; }
+        nextPage = page.nextPageToken;
+      }
       if (!active) return;
-      setPhotos(previous => pageRequest.token
-        ? [...previous, ...page.photos.filter(photo => !previous.some(saved => saved.id === photo.id))]
-        : page.photos);
-      setNextPage(page.nextPageToken);
-    }).catch(cause => {
+      const result = { photos: items, shown: Math.min(target, items.length), nextPage };
+      cache.set(gallery.id, result);
+      setCached(result);
+    })().catch(cause => {
       if (active) setError(cause instanceof Error ? cause.message : 'Could not load photo previews.');
-    }).finally(() => { if (active) setLoading(false); });
+    }).finally(() => { if (active) setRequestedCount(null); });
     return () => { active = false; };
-  }, [gallery.id, previewsEnabled, loadGalleryPhotos, pageRequest]);
+  }, [cache, gallery.id, previewsEnabled, loadGalleryPhotos, requestedCount]);
 
   function openDrive() {
     setLinkError('');
@@ -91,7 +118,7 @@ function GalleryPreview({ gallery, previewsEnabled, onBack }: { gallery: ClientG
     {!!linkError && <ErrorMessage message={linkError} />}
     {!previewsEnabled && <Text style={ui.body}>Open this gallery in Drive to view your photos.</Text>}
     {!!error && <View style={ui.gap}><ErrorMessage message={error} />
-      <Button title="Retry previews" variant="ghost" onPress={() => setPageRequest(request => ({ ...request }))} />
+      <Button title="Retry previews" variant="ghost" onPress={() => setRequestedCount(shown + drivePhotoPageSize)} />
     </View>}
     {previewsEnabled && !loading && !error && !photos.length && <EmptyState icon="image" title="No photo previews" description="Open the gallery in Google Drive to check its contents." />}
     <View style={styles.grid}>
@@ -100,7 +127,7 @@ function GalleryPreview({ gallery, previewsEnabled, onBack }: { gallery: ClientG
         return <Card key={photo.id} style={styles.tile}>
           <View style={[styles.preview, { backgroundColor: colors.mint }]}>
             <Feather name="image" size={25} color={colors.primaryDark} />
-            {source && <Image source={source} cachePolicy="none" contentFit="cover" accessibilityLabel={photo.name}
+            {source && <Image source={source} cachePolicy="memory" contentFit="cover" accessibilityLabel={photo.name}
               style={StyleSheet.absoluteFill} />}
           </View>
           <Text numberOfLines={2} style={ui.label}>{photo.name}</Text>
@@ -108,7 +135,7 @@ function GalleryPreview({ gallery, previewsEnabled, onBack }: { gallery: ClientG
       })}
     </View>
     {loading ? <ActivityIndicator color={colors.primary} accessibilityLabel="Loading Drive photos" />
-      : nextPage && !error ? <Button title="Load more" icon="chevron-down" variant="ghost" onPress={() => setPageRequest({ token: nextPage })} /> : null}
+      : hasMore && !error ? <Button title="Load more" icon="chevron-down" variant="ghost" onPress={() => setRequestedCount(shown + drivePhotoPageSize)} /> : null}
   </Screen>;
 }
 

@@ -20,6 +20,7 @@ export type ClientGallery = Pick<PhotoGallery, 'id' | 'driveLink' | 'createdAt'>
 export type ClientGalleryList = { galleries: ClientGallery[]; previewsEnabled: boolean };
 export type DrivePhoto = { id: string; name: string; hasThumbnail: boolean };
 export type DrivePhotoPage = { photos: DrivePhoto[]; nextPageToken?: string };
+export const drivePhotoPageSize = 4;
 export interface StudioData { version: 1; profile: Profile | null; events: StudioEvent[]; clients: Client[]; theme?: ThemeName; homePhoto?: string; customEventTypes?: string[]; photoGalleries?: PhotoGallery[] }
 export type EventInput = Omit<StudioEvent, 'id' | 'createdAt'>;
 export type ClientInput = Omit<Client, 'id' | 'createdAt'>;

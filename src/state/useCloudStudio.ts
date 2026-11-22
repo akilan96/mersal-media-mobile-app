@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
+import { randomUUID } from 'expo-crypto';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { File } from 'expo-file-system';
 import { apiRequest, ApiRequestError, cloudApiUrl } from '../services/cloudApi';
@@ -14,6 +15,7 @@ const sessionKey = 'mersal.cloud.session.v1';
 const themeKeys = { client: 'mersal.client.theme.v1', staff: 'mersal.staff.theme.v1' } as const;
 type DeviceThemes = Partial<Record<keyof typeof themeKeys, ThemeName>>;
 type Session = { token: string; expiresAt: string };
+const thumbnailSessions = new WeakMap<Session, string>();
 const sessionStorage = Platform.OS !== 'web';
 
 function dataUri(blob: Blob): Promise<string> {
@@ -247,8 +249,15 @@ export function useCloudStudio(): StudioContext {
   function galleryThumbnail(galleryId: string, photoId: string) {
     const active = session.current;
     if (!active || !cloudApiUrl) return;
+    const uri = cloudApiUrl + '/client/galleries/' + encodeURIComponent(galleryId) + '/photos/' + encodeURIComponent(photoId) + '/thumbnail';
+    let cacheSession = thumbnailSessions.get(active);
+    if (cacheSession === undefined) {
+      cacheSession = randomUUID();
+      thumbnailSessions.set(active, cacheSession);
+    }
     return {
-      uri: cloudApiUrl + '/client/galleries/' + encodeURIComponent(galleryId) + '/photos/' + encodeURIComponent(photoId) + '/thumbnail',
+      uri,
+      cacheKey: cacheSession + ':' + uri,
       headers: { Authorization: 'Bearer ' + active.token },
     };
   }

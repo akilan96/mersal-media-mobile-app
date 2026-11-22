@@ -19,7 +19,7 @@ export interface StudioContext {
   loadClientPayments?(): Promise<ClientPaymentSummary | null>;
   loadClientGalleries?(): Promise<ClientGalleryList>;
   loadGalleryPhotos?(galleryId: string, pageToken?: string): Promise<DrivePhotoPage>;
-  galleryThumbnail?(galleryId: string, photoId: string): { uri: string; headers: Record<string, string> } | undefined;
+  galleryThumbnail?(galleryId: string, photoId: string): { uri: string; cacheKey: string; headers: Record<string, string> } | undefined;
   data: StudioData; configured: boolean; authenticated: boolean; loading: boolean; storageError: string | null;
   authError: string | null; busy: boolean; retryLoad(): void;
   setup(profile: Profile, pin: string, joinCode?: string): Promise<void>; unlock(username: string, pin: string): Promise<void>;
