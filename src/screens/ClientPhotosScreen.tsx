@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import Feather from '@expo/vector-icons/Feather';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Button, Card, EmptyState, ErrorMessage, Header, Screen } from '../components/ui';
 import { drivePhotoPageSize, type ClientGallery, type ClientGalleryList, type DrivePhoto } from '../domain/types';
 import { formatDate } from '../domain/helpers';
@@ -10,6 +11,10 @@ import { useStudioTheme } from '../theme';
 import { ClientPhotoViewer, HeartIcon } from './ClientPhotoViewer';
 
 type CachedGallery = { photos: DrivePhoto[]; shown: number; nextPage?: string };
+
+function needsFirstPage(entry?: CachedGallery) {
+  return !entry || (entry.shown < drivePhotoPageSize && (entry.shown < entry.photos.length || !!entry.nextPage));
+}
 
 export function ClientPhotosScreen() {
   return <ClientGalleryScreen />;
@@ -76,12 +81,14 @@ function GalleryPreview({ gallery, favourites, previewsEnabled, onBack, onRefres
   const { loadGalleryPhotos, loadGalleryPhotoCount, galleryChange, setGalleryFavourite } = useStudio();
   const { colors, ui } = useStudioTheme();
   const [cached, setCached] = useState(() => cache.get(gallery.id));
-  const [requestedCount, setRequestedCount] = useState<number | null>(() => previewsEnabled && !cache.has(gallery.id) ? drivePhotoPageSize : null);
+  const [requestedCount, setRequestedCount] = useState<number | null>(() =>
+    previewsEnabled && needsFirstPage(cache.get(gallery.id)) ? drivePhotoPageSize : null);
   const [error, setError] = useState('');
   const [linkError, setLinkError] = useState('');
   const [likeError, setLikeError] = useState('');
   const [savingPhoto, setSavingPhoto] = useState<string>();
   const likePending = useRef(false);
+  const failedTarget = useRef(drivePhotoPageSize);
   const [viewer, setViewer] = useState<{ photos: DrivePhoto[]; startIndex: number }>();
   const [total, setTotal] = useState<number>();
   const lastChange = useRef(galleryChange);
@@ -89,6 +96,12 @@ function GalleryPreview({ gallery, favourites, previewsEnabled, onBack, onRefres
   const shown = cached?.shown ?? 0;
   const photos = cached?.photos.slice(0, shown) ?? [];
   const hasMore = !!cached && (shown < cached.photos.length || !!cached.nextPage);
+
+  useEffect(() => {
+    if (previewsEnabled && needsFirstPage(cache.get(gallery.id))) {
+      setRequestedCount(current => current ?? drivePhotoPageSize);
+    }
+  }, [cache, gallery.id, previewsEnabled, drivePhotoPageSize]);
 
   useEffect(() => {
     if (!previewsEnabled || !loadGalleryPhotoCount) return;
@@ -121,6 +134,7 @@ function GalleryPreview({ gallery, favourites, previewsEnabled, onBack, onRefres
     if (!previewsEnabled || !loadGalleryPhotos || requestedCount === null) return;
     let active = true;
     const target = requestedCount;
+    failedTarget.current = target;
     const load = loadGalleryPhotos;
     setError('');
     void (async () => {
@@ -138,10 +152,19 @@ function GalleryPreview({ gallery, favourites, previewsEnabled, onBack, onRefres
             items.push(photo);
           }
         }
-        if (page.nextPageToken === nextPage) { nextPage = undefined; break; }
+        const repeatedToken = !!page.nextPageToken && page.nextPageToken === nextPage;
         nextPage = page.nextPageToken;
+        if (!active) return;
+        const result = { photos: [...items], shown: Math.min(target, items.length), nextPage };
+        cache.set(gallery.id, result);
+        setCached(result);
+        if (repeatedToken) {
+          if (items.length < target) throw new Error('Could not load the next set of photos. Please retry.');
+          break;
+        }
       }
       if (!active) return;
+      if (nextPage && items.length < target) throw new Error('Could not finish loading this set of photos. Please retry.');
       const result = { photos: items, shown: Math.min(target, items.length), nextPage };
       cache.set(gallery.id, result);
       setCached(result);
@@ -172,13 +195,17 @@ function GalleryPreview({ gallery, favourites, previewsEnabled, onBack, onRefres
   }
 
   return <Screen refreshing={false} onRefresh={onRefresh}>
-    <Header title={favourites ? 'Favourites' : 'Gallery'} onBack={onBack} />
-    <Button title="Open in Google Drive" icon="external-link" variant="secondary" onPress={openDrive} />
+    <Header title={favourites ? 'Favourites' : 'Gallery'} onBack={onBack} right={
+      <Pressable accessibilityRole="button" accessibilityLabel="Open in Google Drive" onPress={openDrive}
+        style={({ pressed }) => [styles.driveAction, { backgroundColor: colors.mint, borderColor: colors.border }, pressed && styles.pressed]}>
+        <MaterialCommunityIcons name="google-drive" size={23} color={colors.primaryDark} />
+      </Pressable>
+    } />
     {!!linkError && <ErrorMessage message={linkError} />}
     {!!likeError && <ErrorMessage message={likeError} />}
     {!previewsEnabled && <Text style={ui.body}>Open this gallery in Drive to view your photos.</Text>}
     {!!error && <View style={ui.gap}><ErrorMessage message={error} />
-      <Button title="Retry previews" variant="ghost" onPress={() => setRequestedCount(shown + drivePhotoPageSize)} />
+      <Button title="Retry previews" variant="ghost" onPress={() => setRequestedCount(failedTarget.current)} />
     </View>}
     {previewsEnabled && !loading && !error && !photos.length && <EmptyState icon={favourites ? 'heart' : 'image'}
       title={favourites ? 'No favourites yet' : 'No photo previews'}
@@ -193,12 +220,20 @@ function GalleryPreview({ gallery, favourites, previewsEnabled, onBack, onRefres
           onPress={() => setViewer({ photos, startIndex: index })}>
           <PhotoTile galleryId={gallery.id} photo={photo} />
         </Pressable>
-        {setGalleryFavourite && <Pressable accessibilityRole="button"
-          accessibilityLabel={`${favourites ? 'Remove from favourites' : 'Like'} photo ${index + 1}`}
-          accessibilityState={{ selected: favourites, busy: savingPhoto === photo.id, disabled: !!savingPhoto }}
-          disabled={!!savingPhoto} style={styles.likeButton} onPress={() => void toggleLike(photo.id)}>
-          {savingPhoto === photo.id ? <ActivityIndicator size="small" color="#A8EEE0" /> : <HeartIcon size={19} filled={favourites} />}
-        </Pressable>}
+        <View pointerEvents="box-none" style={styles.tileActions}>
+          <Pressable accessibilityRole="button" accessibilityLabel={`Preview photo ${index + 1}`}
+            style={({ pressed }) => [styles.previewButton, pressed && styles.pressed]}
+            onPress={() => setViewer({ photos, startIndex: index })}>
+            <Feather name="maximize-2" size={14} color="#FFFFFF" />
+            <Text numberOfLines={1} style={styles.previewLabel}>Preview</Text>
+          </Pressable>
+          {setGalleryFavourite && <Pressable accessibilityRole="button"
+            accessibilityLabel={`${favourites ? 'Remove from favourites' : 'Like'} photo ${index + 1}`}
+            accessibilityState={{ selected: favourites, busy: savingPhoto === photo.id, disabled: !!savingPhoto }}
+            disabled={!!savingPhoto} style={styles.likeButton} onPress={() => void toggleLike(photo.id)}>
+            {savingPhoto === photo.id ? <ActivityIndicator size="small" color="#A8EEE0" /> : <HeartIcon size={19} filled={favourites} />}
+          </Pressable>}
+        </View>
       </View>)}
     </View>
     {loading ? <ActivityIndicator color={colors.primary} accessibilityLabel="Loading Drive photos" />
@@ -222,12 +257,17 @@ function PhotoTile({ galleryId, photo }: { galleryId: string; photo: DrivePhoto 
 }
 
 const styles = StyleSheet.create({
+  driveAction: { width: 46, height: 46, borderRadius: 15, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 12 },
   tile: { width: '48.5%', aspectRatio: 4 / 5, borderRadius: 19, borderWidth: 1, overflow: 'hidden' },
   skeleton: { opacity: 0.7 },
   openPhoto: { flex: 1 },
   pressed: { opacity: 0.8 },
   preview: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  likeButton: { position: 'absolute', right: 8, bottom: 8, width: 44, height: 44, borderRadius: 22,
+  tileActions: { position: 'absolute', left: 6, right: 6, bottom: 6, flexDirection: 'row', alignItems: 'center', gap: 4 },
+  previewButton: { flex: 1, minHeight: 44, flexDirection: 'row', alignItems: 'center',
+    justifyContent: 'center', gap: 5, borderRadius: 22, backgroundColor: '#10171BE6', borderColor: '#FFFFFF50', borderWidth: 1 },
+  previewLabel: { color: '#FFFFFF', fontSize: 13, fontWeight: '700', flexShrink: 1 },
+  likeButton: { width: 44, height: 44, borderRadius: 22,
     alignItems: 'center', justifyContent: 'center', backgroundColor: '#10171BCF', borderColor: '#FFFFFF50', borderWidth: 1 },
 });
