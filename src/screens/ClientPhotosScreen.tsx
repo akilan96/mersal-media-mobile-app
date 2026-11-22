@@ -7,7 +7,7 @@ import { drivePhotoPageSize, type ClientGallery, type ClientGalleryList, type Dr
 import { formatDate } from '../domain/helpers';
 import { useStudio } from '../state/StudioProvider';
 import { useStudioTheme } from '../theme';
-import { ClientPhotoViewer } from './ClientPhotoViewer';
+import { ClientPhotoViewer, HeartIcon } from './ClientPhotoViewer';
 
 type CachedGallery = { photos: DrivePhoto[]; shown: number; nextPage?: string };
 
@@ -73,18 +73,31 @@ export function ClientGalleryScreen({ favourites = false }: { favourites?: boole
 function GalleryPreview({ gallery, favourites, previewsEnabled, onBack, onRefresh, cache }: {
   gallery: ClientGallery; favourites: boolean; previewsEnabled: boolean; onBack: () => void; onRefresh: () => void; cache: Map<string, CachedGallery>;
 }) {
-  const { loadGalleryPhotos, galleryChange } = useStudio();
+  const { loadGalleryPhotos, loadGalleryPhotoCount, galleryChange, setGalleryFavourite } = useStudio();
   const { colors, ui } = useStudioTheme();
   const [cached, setCached] = useState(() => cache.get(gallery.id));
   const [requestedCount, setRequestedCount] = useState<number | null>(() => previewsEnabled && !cache.has(gallery.id) ? drivePhotoPageSize : null);
   const [error, setError] = useState('');
   const [linkError, setLinkError] = useState('');
+  const [likeError, setLikeError] = useState('');
+  const [savingPhoto, setSavingPhoto] = useState<string>();
+  const likePending = useRef(false);
   const [viewer, setViewer] = useState<{ photos: DrivePhoto[]; startIndex: number }>();
+  const [total, setTotal] = useState<number>();
   const lastChange = useRef(galleryChange);
   const loading = requestedCount !== null;
   const shown = cached?.shown ?? 0;
   const photos = cached?.photos.slice(0, shown) ?? [];
   const hasMore = !!cached && (shown < cached.photos.length || !!cached.nextPage);
+
+  useEffect(() => {
+    if (!previewsEnabled || !loadGalleryPhotoCount) return;
+    const controller = new AbortController();
+    void loadGalleryPhotoCount(gallery.id, favourites, controller.signal).then(count => {
+      if (!controller.signal.aborted) setTotal(count);
+    }).catch(() => {});
+    return () => controller.abort();
+  }, [favourites, gallery.id, galleryChange, loadGalleryPhotoCount, previewsEnabled]);
 
   useEffect(() => {
     if (!cached) return;
@@ -101,7 +114,6 @@ function GalleryPreview({ gallery, favourites, previewsEnabled, onBack, onRefres
     lastChange.current = galleryChange;
     if (galleryChange?.id !== gallery.id || !previewsEnabled) return;
     cache.delete(gallery.id);
-    setCached(undefined);
     setRequestedCount(Math.max(shown, drivePhotoPageSize));
   }, [cache, gallery.id, galleryChange, previewsEnabled, shown]);
 
@@ -144,10 +156,26 @@ function GalleryPreview({ gallery, favourites, previewsEnabled, onBack, onRefres
     void Linking.openURL(gallery.driveLink).catch(() => setLinkError('Could not open the Google Drive gallery.'));
   }
 
+  async function toggleLike(photoId: string) {
+    if (likePending.current || !setGalleryFavourite) return;
+    likePending.current = true;
+    setLikeError('');
+    setSavingPhoto(photoId);
+    try {
+      await setGalleryFavourite(gallery.id, photoId, !favourites);
+    } catch (cause) {
+      setLikeError(cause instanceof Error ? cause.message : 'Could not update this favourite.');
+    } finally {
+      likePending.current = false;
+      setSavingPhoto(undefined);
+    }
+  }
+
   return <Screen refreshing={false} onRefresh={onRefresh}>
     <Header title={favourites ? 'Favourites' : 'Gallery'} onBack={onBack} />
     <Button title="Open in Google Drive" icon="external-link" variant="secondary" onPress={openDrive} />
     {!!linkError && <ErrorMessage message={linkError} />}
+    {!!likeError && <ErrorMessage message={likeError} />}
     {!previewsEnabled && <Text style={ui.body}>Open this gallery in Drive to view your photos.</Text>}
     {!!error && <View style={ui.gap}><ErrorMessage message={error} />
       <Button title="Retry previews" variant="ghost" onPress={() => setRequestedCount(shown + drivePhotoPageSize)} />
@@ -156,17 +184,27 @@ function GalleryPreview({ gallery, favourites, previewsEnabled, onBack, onRefres
       title={favourites ? 'No favourites yet' : 'No photo previews'}
       description={favourites ? 'Open a photo and tap the heart to select it.' : 'Open the gallery in Google Drive to check its contents.'} />}
     <View style={styles.grid}>
-      {photos.map((photo, index) => <Card key={photo.id} style={styles.tile}>
-        <Pressable accessibilityRole="button" accessibilityLabel={'View ' + photo.name} onPress={() => setViewer({ photos, startIndex: index })}>
+      {loading && !photos.length && Array.from({ length: drivePhotoPageSize }, (_, index) => (
+        <View key={index} style={[styles.tile, styles.skeleton, { backgroundColor: colors.mint, borderColor: colors.border }]} />
+      ))}
+      {photos.map((photo, index) => <View key={photo.id} style={[styles.tile, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <Pressable accessibilityRole="button" accessibilityLabel={`Open photo ${index + 1}`}
+          style={({ pressed }) => [styles.openPhoto, pressed && styles.pressed]}
+          onPress={() => setViewer({ photos, startIndex: index })}>
           <PhotoTile galleryId={gallery.id} photo={photo} />
-          <Text numberOfLines={2} style={ui.label}>{photo.name}</Text>
         </Pressable>
-      </Card>)}
+        {setGalleryFavourite && <Pressable accessibilityRole="button"
+          accessibilityLabel={`${favourites ? 'Remove from favourites' : 'Like'} photo ${index + 1}`}
+          accessibilityState={{ selected: favourites, busy: savingPhoto === photo.id, disabled: !!savingPhoto }}
+          disabled={!!savingPhoto} style={styles.likeButton} onPress={() => void toggleLike(photo.id)}>
+          {savingPhoto === photo.id ? <ActivityIndicator size="small" color="#A8EEE0" /> : <HeartIcon size={19} filled={favourites} />}
+        </Pressable>}
+      </View>)}
     </View>
     {loading ? <ActivityIndicator color={colors.primary} accessibilityLabel="Loading Drive photos" />
       : hasMore && !error ? <Button title="Load more" icon="chevron-down" variant="ghost" onPress={() => setRequestedCount(shown + drivePhotoPageSize)} /> : null}
     {viewer && <ClientPhotoViewer galleryId={gallery.id} photos={viewer.photos} startIndex={viewer.startIndex}
-      favourites={favourites} hasMore={hasMore} loading={loading} pageError={error}
+      favourites={favourites} total={total} hasMore={hasMore} loading={loading} pageError={error}
       onLoadMore={() => setRequestedCount(shown + drivePhotoPageSize)} onClose={() => setViewer(undefined)} />}
   </Screen>;
 }
@@ -178,13 +216,18 @@ function PhotoTile({ galleryId, photo }: { galleryId: string; photo: DrivePhoto 
   const source = galleryThumbnail?.(galleryId, photo.id, false, photo.name);
   return <View style={[styles.preview, { backgroundColor: colors.mint }]}>
     <Feather name={failed ? 'image' : 'camera'} size={25} color={colors.primaryDark} />
-    {source && !failed && <Image source={source} cachePolicy="memory-disk" contentFit="cover"
+    {source && !failed && <Image source={source} cachePolicy="memory-disk" contentFit="cover" transition={180}
       onError={() => setFailed(true)} style={StyleSheet.absoluteFill} />}
   </View>;
 }
 
 const styles = StyleSheet.create({
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  tile: { width: '48%', padding: 8, gap: 7 },
-  preview: { aspectRatio: 1, borderRadius: 12, overflow: 'hidden', justifyContent: 'center', alignItems: 'center' },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 12 },
+  tile: { width: '48.5%', aspectRatio: 4 / 5, borderRadius: 19, borderWidth: 1, overflow: 'hidden' },
+  skeleton: { opacity: 0.7 },
+  openPhoto: { flex: 1 },
+  pressed: { opacity: 0.8 },
+  preview: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  likeButton: { position: 'absolute', right: 8, bottom: 8, width: 44, height: 44, borderRadius: 22,
+    alignItems: 'center', justifyContent: 'center', backgroundColor: '#10171BCF', borderColor: '#FFFFFF50', borderWidth: 1 },
 });

@@ -189,6 +189,15 @@ export function createDriveReader(env: Readonly<Record<string, string | undefine
   }
 
   return {
+    async count(link: string, favourites: boolean) {
+      const target = driveTarget(link);
+      if (target.kind !== 'folder') {
+        const root = await metadata(target.id, target);
+        if (root.mimeType !== folderMime || root.trashed) return !favourites && isPhoto(root) ? 1 : 0;
+      }
+      const parent = favourites ? await favouritesFolder(target) : target.id;
+      return parent ? new Set(await photoIds(target, parent)).size : 0;
+    },
     async summary(link: string) {
       const target = driveTarget(link);
       const root = await metadata(target.id, target);

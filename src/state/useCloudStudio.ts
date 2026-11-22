@@ -249,6 +249,43 @@ export function useCloudStudio(): StudioContext {
     return await response.json() as DrivePhotoPage;
   }, []);
 
+  const loadGalleryPhotoCount = useCallback(async (galleryId: string, favourites: boolean, signal?: AbortSignal) => {
+    const active = session.current;
+    if (!active) throw new Error('Sign in to continue.');
+    try {
+      const response = await apiRequest('/client/galleries/' + encodeURIComponent(galleryId) + '/summary?favourites=' + favourites, { token: active.token });
+      const { total } = await response.json() as { total: number };
+      if (Number.isSafeInteger(total) && total >= 0) return total;
+    } catch (error) {
+      if (!(error instanceof ApiRequestError) || ![403, 404].includes(error.status)) throw error;
+    }
+    // Older deployments can use the client summary when it represents just this gallery.
+    try {
+      const { galleries } = await loadClientGalleries();
+      if (galleries.length === 1 && galleries[0].id === galleryId && !signal?.aborted && session.current === active) {
+        const response = await apiRequest('/client/photo-summary', { token: active.token });
+        const { total, selected } = await response.json() as ClientPhotoSummary;
+        if (Number.isSafeInteger(total) && Number.isSafeInteger(selected) && selected >= 0 && total >= selected) {
+          return favourites ? selected : total - selected;
+        }
+      }
+    } catch {
+      // The gallery pages also work with older deployments that lack a summary.
+    }
+    const ids = new Set<string>();
+    const tokens = new Set<string>();
+    let pageToken: string | undefined;
+    do {
+      if (signal?.aborted || session.current !== active) throw new Error('Photo count cancelled.');
+      const page = await loadGalleryPhotos(galleryId, pageToken, favourites);
+      for (const photo of page.photos) ids.add(photo.id);
+      pageToken = page.nextPageToken;
+      if (pageToken && tokens.has(pageToken)) throw new Error('Could not finish counting gallery photos.');
+      if (pageToken) tokens.add(pageToken);
+    } while (pageToken);
+    return ids.size;
+  }, [loadClientGalleries, loadGalleryPhotos]);
+
   const loadClientPhotoSummary = useCallback(async () => {
     const active = session.current;
     if (!active) throw new Error('Sign in to continue.');
@@ -280,7 +317,7 @@ export function useCloudStudio(): StudioContext {
     cloud: true, configured: true, data, authenticated, role, accountName,
     deviceTheme: authenticated ? deviceThemes[themeScope] : undefined,
     loading, storageError, authError, busy, retryLoad, listAccounts, loadClientPayments,
-    loadClientGalleries, loadGalleryPhotos, galleryThumbnail, loadClientPhotoSummary, setGalleryFavourite, galleryChange,
+    loadClientGalleries, loadGalleryPhotos, loadGalleryPhotoCount, galleryThumbnail, loadClientPhotoSummary, setGalleryFavourite, galleryChange,
     async linkClientAccount(username, clientId) {
       const active = session.current;
       if (!active) throw new Error('Sign in to continue.');

@@ -133,7 +133,7 @@ export function createExpressApi(store: StudioStore, app = express(), sharedSign
       res.locals.account = { username: account.username, name: account.name, role };
       res.locals.clientId = account.clientId;
       res.locals.studioId = 'shared';
-      const galleryRead = /^\/client\/galleries(?:\/[^/]+\/photos(?:\/[^/]+\/thumbnail)?)?$/.test(req.path);
+      const galleryRead = /^\/client\/galleries(?:\/[^/]+\/(?:summary|photos(?:\/[^/]+\/thumbnail)?))?$/.test(req.path);
       const favouriteWrite = req.method === 'PUT' && /^\/client\/galleries\/[^/]+\/photos\/[^/]+\/favourite$/.test(req.path);
       if (role === 'client' && !favouriteWrite && !(req.method === 'GET' && (galleryRead || ['/auth/me', '/client/payment-summary', '/client/photo-summary'].includes(req.path)))
         && !(req.method === 'POST' && req.path === '/auth/logout')) {
@@ -200,6 +200,13 @@ export function createExpressApi(store: StudioStore, app = express(), sharedSign
   api.get('/client/galleries', async (_req, res) => {
     const galleries = (await clientGalleries(res)).map(({ id, driveLink, createdAt }) => ({ id, driveLink, createdAt }));
     res.json({ galleries, previewsEnabled: Boolean(sharedSignup?.drive) });
+  });
+  api.get('/client/galleries/:id/summary', async (req, res) => {
+    const gallery = await clientGallery(res, req.params.id);
+    const drive = sharedSignup?.drive;
+    if (!drive) throw new ApiError(503, 'In-app Drive previews are not configured.');
+    const total = await drive.count(gallery.driveLink, req.query.favourites === 'true');
+    res.json({ total });
   });
   api.get('/client/photo-summary', async (_req, res) => {
     const galleries = await clientGalleries(res);
