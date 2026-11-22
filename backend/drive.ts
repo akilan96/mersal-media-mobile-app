@@ -150,19 +150,22 @@ export function createDriveReader(env: Readonly<Record<string, string | undefine
   }
   const photoFilter = [...photoMime].map(mime => "mimeType = '" + mime + "'").join(' or ');
 
-  async function photoInFolder(target: DriveTarget, folderId: string, photo: DriveItem) {
-    if (photo.parents?.includes(folderId)) return photo;
-    if (photo.parents?.length) return undefined;
-    // A folder query can confirm membership when Drive omits parents from file metadata.
-    const escaped = photo.name.replace(/['\\]/g, '\\$&');
+  async function findFolderPhoto(target: DriveTarget, folderId: string, fileId: string, name: string) {
+    const escaped = name.replace(/['\\]/g, '\\$&');
     let token: string | undefined;
     do {
-      const page = await children(target, folderId, "name = '" + escaped + "' and mimeType = '" + photo.mimeType + "'", itemFields, 100, token);
-      const match = page.files.find(item => item.id === photo.id && isPhoto(item));
+      const page = await children(target, folderId, "name = '" + escaped + "' and (" + photoFilter + ')', itemFields, 100, token);
+      const match = page.files.find(item => item.id === fileId && isPhoto(item));
       if (match) return match;
       token = page.nextPageToken;
     } while (token);
     return undefined;
+  }
+
+  async function photoInFolder(target: DriveTarget, folderId: string, photo: DriveItem) {
+    if (photo.parents?.includes(folderId)) return photo;
+    if (photo.parents?.length) return undefined;
+    return findFolderPhoto(target, folderId, photo.id, photo.name);
   }
 
   async function favouritesFolder(target: DriveTarget) {
@@ -223,15 +226,21 @@ export function createDriveReader(env: Readonly<Record<string, string | undefine
       const result = await children(target, parent, photoFilter, itemFields, drivePhotoPageSize, pageToken);
       return { photos: result.files.filter(isPhoto).map(view), nextPageToken: result.nextPageToken };
     },
-    async thumbnail(link: string, fileId: string, large = false) {
+    async thumbnail(link: string, fileId: string, large = false, nameHint?: string) {
       const target = driveTarget(link);
+      if (!idPattern.test(fileId)) throw new StoreError(404, 'Photo not found.');
       if (target.kind === 'file' && target.id !== fileId) throw new StoreError(404, 'Photo not found.');
-      const metadataFile = await metadata(fileId, target);
-      if (!isPhoto(metadataFile)) throw new StoreError(404, 'Photo preview not found.');
-      let file = target.id === fileId ? metadataFile : await photoInFolder(target, target.id, metadataFile);
-      if (!file && target.kind !== 'file') {
-        const folder = await favouritesFolder(target);
-        if (folder) file = await photoInFolder(target, folder, metadataFile);
+      let file = nameHint && target.kind === 'folder' ? await findFolderPhoto(target, target.id, fileId, nameHint) : undefined;
+      let metadataThumbnail: string | undefined;
+      if (!file) {
+        const metadataFile = await metadata(fileId, target);
+        if (!isPhoto(metadataFile)) throw new StoreError(404, 'Photo preview not found.');
+        metadataThumbnail = metadataFile.thumbnailLink;
+        file = target.id === fileId ? metadataFile : await photoInFolder(target, target.id, metadataFile);
+        if (!file && target.kind !== 'file') {
+          const folder = await favouritesFolder(target);
+          if (folder) file = await photoInFolder(target, folder, metadataFile);
+        }
       }
       if (!file) {
         throw new StoreError(404, 'Photo preview not found.');
@@ -252,7 +261,7 @@ export function createDriveReader(env: Readonly<Record<string, string | undefine
         }
         return { contentType, bytes: Buffer.concat(chunks) };
       }
-      const thumbnailLink = file.thumbnailLink ?? metadataFile.thumbnailLink;
+      const thumbnailLink = file.thumbnailLink ?? metadataThumbnail;
       if (thumbnailLink) {
         const url = new URL(thumbnailLink);
         if (url.protocol === 'https:' && url.hostname.endsWith('.googleusercontent.com')) {

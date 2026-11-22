@@ -19,7 +19,7 @@ export interface StudioContext {
   loadClientPayments?(): Promise<ClientPaymentSummary | null>;
   loadClientGalleries?(): Promise<ClientGalleryList>;
   loadGalleryPhotos?(galleryId: string, pageToken?: string, favourites?: boolean): Promise<DrivePhotoPage>;
-  galleryThumbnail?(galleryId: string, photoId: string, large?: boolean): { uri: string; cacheKey: string; headers: Record<string, string> } | undefined;
+  galleryThumbnail?(galleryId: string, photoId: string, large?: boolean, name?: string): { uri: string; cacheKey: string; headers: Record<string, string> } | undefined;
   loadClientPhotoSummary?(): Promise<import('../domain/types').ClientPhotoSummary>;
   setGalleryFavourite?(galleryId: string, photoId: string, selected: boolean): Promise<void>;
   galleryChange?: { id: string };

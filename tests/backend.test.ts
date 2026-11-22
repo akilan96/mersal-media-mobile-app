@@ -26,6 +26,7 @@ test('Drive thumbnails verify folder membership when file metadata omits parents
   const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048, privateKeyEncoding: { type: 'pkcs8', format: 'pem' }, publicKeyEncoding: { type: 'spki', format: 'pem' } });
   const photo = { id: 'photo', mimeType: 'image/jpeg', name: "Client's photo.JPG" };
   let thumbnailRequests = 0;
+  let metadataRequests = 0;
   t.mock.method(globalThis, 'fetch', async (input: string) => {
     const url = new URL(input);
     if (url.hostname === 'oauth2.googleapis.com') return Response.json({ access_token: 'fake-token' });
@@ -33,7 +34,7 @@ test('Drive thumbnails verify folder membership when file metadata omits parents
       thumbnailRequests++;
       return new Response('JPEG', { headers: { 'Content-Type': 'image/jpeg' } });
     }
-    if (url.pathname.endsWith('/photo')) return Response.json(photo);
+    if (url.pathname.endsWith('/photo')) { metadataRequests++; return Response.json(photo); }
     if (url.pathname.endsWith('/other')) return Response.json({ ...photo, id: 'other' });
     assert.equal(url.pathname, '/drive/v3/files');
     const query = url.searchParams.get('q') ?? '';
@@ -47,8 +48,10 @@ test('Drive thumbnails verify folder membership when file metadata omits parents
   const preview = await drive.thumbnail(link, 'photo');
   assert.equal(preview.contentType, 'image/jpeg');
   assert.equal(preview.bytes.toString(), 'JPEG');
+  await drive.thumbnail(link, 'photo', false, photo.name);
+  assert.equal(metadataRequests, 1);
   await assert.rejects(drive.thumbnail(link, 'other'), { status: 404 });
-  assert.equal(thumbnailRequests, 1);
+  assert.equal(thumbnailRequests, 2);
 });
 
 test('studio API persists private data and validates event and client workflows', async () => {

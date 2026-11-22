@@ -233,7 +233,8 @@ export function createExpressApi(store: StudioStore, app = express(), sharedSign
     const gallery = await clientGallery(res, req.params.id);
     const drive = sharedSignup?.drive;
     if (!drive) throw new ApiError(503, 'In-app Drive previews are not configured.');
-    const photo = await drive.thumbnail(gallery.driveLink, req.params.fileId, req.query.size === 'large');
+    const nameHint = typeof req.query.name === 'string' && req.query.name.length <= 512 ? req.query.name : undefined;
+    const photo = await drive.thumbnail(gallery.driveLink, req.params.fileId, req.query.size === 'large', nameHint);
     res.set('X-Content-Type-Options', 'nosniff').type(photo.contentType).send(photo.bytes);
   });
   api.get('/client/payment-summary', async (_req, res) => {

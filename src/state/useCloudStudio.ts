@@ -14,8 +14,7 @@ import { settingsThemes } from '../theme';
 const sessionKey = 'mersal.cloud.session.v1';
 const themeKeys = { client: 'mersal.client.theme.v1', staff: 'mersal.staff.theme.v1' } as const;
 type DeviceThemes = Partial<Record<keyof typeof themeKeys, ThemeName>>;
-type Session = { token: string; expiresAt: string };
-const thumbnailSessions = new WeakMap<Session, string>();
+type Session = { token: string; expiresAt: string; photoCacheId: string };
 const sessionStorage = Platform.OS !== 'web';
 
 function dataUri(blob: Blob): Promise<string> {
@@ -141,7 +140,8 @@ export function useCloudStudio(): StudioContext {
           if (raw) {
             const saved = JSON.parse(raw) as Session & { endpoint: string };
             if (saved.endpoint === cloudApiUrl && typeof saved.token === 'string' && Date.parse(saved.expiresAt) > Date.now()) {
-              session.current = saved;
+              session.current = { ...saved, photoCacheId: saved.photoCacheId || randomUUID() };
+              if (!saved.photoCacheId) await SecureStore.setItemAsync(sessionKey, JSON.stringify({ ...session.current, endpoint: cloudApiUrl }));
             } else await SecureStore.deleteItemAsync(sessionKey);
           }
         }
@@ -183,7 +183,7 @@ export function useCloudStudio(): StudioContext {
     setAuthError(null);
     try {
       const response = await apiRequest(path, { method: 'POST', json });
-      const active: Session = await response.json();
+      const active: Session = { ...await response.json(), photoCacheId: randomUUID() };
       session.current = active;
       if (sessionStorage) await SecureStore.setItemAsync(sessionKey, JSON.stringify({ ...active, endpoint: cloudApiUrl }));
       await refresh(active, true);
@@ -265,18 +265,13 @@ export function useCloudStudio(): StudioContext {
     if (session.current === active) setGalleryChange({ id: galleryId });
   }
 
-  function galleryThumbnail(galleryId: string, photoId: string, large?: boolean) {
+  function galleryThumbnail(galleryId: string, photoId: string, large?: boolean, name?: string) {
     const active = session.current;
     if (!active || !cloudApiUrl) return;
-    const uri = cloudApiUrl + '/client/galleries/' + encodeURIComponent(galleryId) + '/photos/' + encodeURIComponent(photoId) + '/thumbnail' + (large ? '?size=large' : '');
-    let cacheSession = thumbnailSessions.get(active);
-    if (cacheSession === undefined) {
-      cacheSession = randomUUID();
-      thumbnailSessions.set(active, cacheSession);
-    }
+    const uri = cloudApiUrl + '/client/galleries/' + encodeURIComponent(galleryId) + '/photos/' + encodeURIComponent(photoId) + '/thumbnail' + (large ? '?size=large' : '?size=small');
     return {
-      uri,
-      cacheKey: cacheSession + ':' + uri,
+      uri: name ? uri + '&name=' + encodeURIComponent(name) : uri,
+      cacheKey: active.photoCacheId + ':' + uri,
       headers: { Authorization: 'Bearer ' + active.token },
     };
   }

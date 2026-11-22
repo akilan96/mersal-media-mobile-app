@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Linking, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import Feather from '@expo/vector-icons/Feather';
 import { Button, Card, EmptyState, ErrorMessage, Header, Screen } from '../components/ui';
@@ -8,6 +7,7 @@ import { drivePhotoPageSize, type ClientGallery, type ClientGalleryList, type Dr
 import { formatDate } from '../domain/helpers';
 import { useStudio } from '../state/StudioProvider';
 import { useStudioTheme } from '../theme';
+import { ClientPhotoViewer } from './ClientPhotoViewer';
 
 type CachedGallery = { photos: DrivePhoto[]; shown: number; nextPage?: string };
 
@@ -79,12 +79,22 @@ function GalleryPreview({ gallery, favourites, previewsEnabled, onBack, onRefres
   const [requestedCount, setRequestedCount] = useState<number | null>(() => previewsEnabled && !cache.has(gallery.id) ? drivePhotoPageSize : null);
   const [error, setError] = useState('');
   const [linkError, setLinkError] = useState('');
-  const [openedPhoto, setOpenedPhoto] = useState<DrivePhoto>();
+  const [viewer, setViewer] = useState<{ photos: DrivePhoto[]; startIndex: number }>();
   const lastChange = useRef(galleryChange);
   const loading = requestedCount !== null;
   const shown = cached?.shown ?? 0;
   const photos = cached?.photos.slice(0, shown) ?? [];
   const hasMore = !!cached && (shown < cached.photos.length || !!cached.nextPage);
+
+  useEffect(() => {
+    if (!cached) return;
+    setViewer(current => {
+      if (!current) return current;
+      const known = new Set(current.photos.map(photo => photo.id));
+      const next = cached.photos.slice(0, cached.shown).filter(photo => !known.has(photo.id));
+      return next.length ? { ...current, photos: [...current.photos, ...next] } : current;
+    });
+  }, [cached]);
 
   useEffect(() => {
     if (galleryChange === lastChange.current) return;
@@ -146,8 +156,8 @@ function GalleryPreview({ gallery, favourites, previewsEnabled, onBack, onRefres
       title={favourites ? 'No favourites yet' : 'No photo previews'}
       description={favourites ? 'Open a photo and tap the heart to select it.' : 'Open the gallery in Google Drive to check its contents.'} />}
     <View style={styles.grid}>
-      {photos.map(photo => <Card key={photo.id} style={styles.tile}>
-        <Pressable accessibilityRole="button" accessibilityLabel={'View ' + photo.name} onPress={() => setOpenedPhoto(photo)}>
+      {photos.map((photo, index) => <Card key={photo.id} style={styles.tile}>
+        <Pressable accessibilityRole="button" accessibilityLabel={'View ' + photo.name} onPress={() => setViewer({ photos, startIndex: index })}>
           <PhotoTile galleryId={gallery.id} photo={photo} />
           <Text numberOfLines={2} style={ui.label}>{photo.name}</Text>
         </Pressable>
@@ -155,7 +165,9 @@ function GalleryPreview({ gallery, favourites, previewsEnabled, onBack, onRefres
     </View>
     {loading ? <ActivityIndicator color={colors.primary} accessibilityLabel="Loading Drive photos" />
       : hasMore && !error ? <Button title="Load more" icon="chevron-down" variant="ghost" onPress={() => setRequestedCount(shown + drivePhotoPageSize)} /> : null}
-    {openedPhoto && <PhotoViewer gallery={gallery} photo={openedPhoto} selected={favourites} onClose={() => setOpenedPhoto(undefined)} />}
+    {viewer && <ClientPhotoViewer galleryId={gallery.id} photos={viewer.photos} startIndex={viewer.startIndex}
+      favourites={favourites} hasMore={hasMore} loading={loading} pageError={error}
+      onLoadMore={() => setRequestedCount(shown + drivePhotoPageSize)} onClose={() => setViewer(undefined)} />}
   </Screen>;
 }
 
@@ -163,84 +175,16 @@ function PhotoTile({ galleryId, photo }: { galleryId: string; photo: DrivePhoto 
   const { galleryThumbnail } = useStudio();
   const { colors } = useStudioTheme();
   const [failed, setFailed] = useState(false);
-  const source = galleryThumbnail?.(galleryId, photo.id);
+  const source = galleryThumbnail?.(galleryId, photo.id, false, photo.name);
   return <View style={[styles.preview, { backgroundColor: colors.mint }]}>
     <Feather name={failed ? 'image' : 'camera'} size={25} color={colors.primaryDark} />
-    {source && !failed && <Image source={source} cachePolicy="memory" contentFit="cover"
+    {source && !failed && <Image source={source} cachePolicy="memory-disk" contentFit="cover"
       onError={() => setFailed(true)} style={StyleSheet.absoluteFill} />}
   </View>;
-}
-
-function PhotoViewer({ gallery, photo, selected, onClose }: {
-  gallery: ClientGallery; photo: DrivePhoto; selected: boolean; onClose: () => void;
-}) {
-  const { galleryThumbnail, setGalleryFavourite } = useStudio();
-  const [saved, setSaved] = useState(selected);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const [imageSize, setImageSize] = useState<'large' | 'small' | 'failed'>('large');
-  const pending = useRef(false);
-  const lastTap = useRef(0);
-  const source = galleryThumbnail?.(gallery.id, photo.id, imageSize === 'large');
-
-  async function toggle() {
-    if (pending.current || !setGalleryFavourite) return;
-    pending.current = true;
-    setBusy(true);
-    setError('');
-    try {
-      await setGalleryFavourite(gallery.id, photo.id, !saved);
-      setSaved(!saved);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not update this favourite.');
-    } finally {
-      pending.current = false;
-      setBusy(false);
-    }
-  }
-
-  function handleImageTap() {
-    const now = Date.now();
-    if (now - lastTap.current < 300) {
-      lastTap.current = 0;
-      void toggle();
-    } else {
-      lastTap.current = now;
-    }
-  }
-
-  return <Modal animationType="fade" onRequestClose={onClose}>
-    <SafeAreaView style={styles.viewer}>
-      <View style={styles.viewerBar}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Close photo" style={styles.viewerButton} onPress={onClose}>
-          <Feather name="x" color="white" size={24} />
-        </Pressable>
-        <Text numberOfLines={1} style={styles.viewerTitle}>{photo.name}</Text>
-        <Pressable accessibilityRole="button" accessibilityLabel={saved ? 'Remove from favourites' : 'Add to favourites'}
-          accessibilityState={{ selected: saved, busy, disabled: busy }} style={styles.viewerButton}
-          disabled={busy} onPress={() => void toggle()}>
-          {busy ? <ActivityIndicator color="white" /> : <Text style={[styles.heart, { color: saved ? '#ff527a' : 'white' }]}>{saved ? '♥' : '♡'}</Text>}
-        </Pressable>
-      </View>
-      {!!error && <ErrorMessage message={error} />}
-      <Pressable accessible={false} style={styles.fullPhoto} onPress={handleImageTap}>
-        {source && imageSize !== 'failed' ? <Image source={source} cachePolicy="memory"
-          contentFit="contain" style={StyleSheet.absoluteFill}
-          onError={() => setImageSize(value => value === 'large' ? 'small' : 'failed')} />
-          : <Text style={styles.viewerTitle}>Preview unavailable. Open the gallery in Google Drive.</Text>}
-      </Pressable>
-    </SafeAreaView>
-  </Modal>;
 }
 
 const styles = StyleSheet.create({
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   tile: { width: '48%', padding: 8, gap: 7 },
   preview: { aspectRatio: 1, borderRadius: 12, overflow: 'hidden', justifyContent: 'center', alignItems: 'center' },
-  viewer: { flex: 1, backgroundColor: '#101316' },
-  viewerBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, gap: 8 },
-  viewerButton: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
-  viewerTitle: { flexShrink: 1, color: 'white', flexGrow: 1, textAlign: 'center', fontSize: 16 },
-  heart: { fontSize: 32 },
-  fullPhoto: { flex: 1, justifyContent: 'center', padding: 16 },
 });
