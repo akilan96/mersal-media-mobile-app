@@ -279,10 +279,11 @@ export function createExpressApi(store: StudioStore, app = express(), sharedSign
   api.patch('/accounts/:username', async (req, res) => {
     if (!store.updateManagedAccount) throw new ApiError(503, 'Account management is unavailable.');
     const current = username.parse(req.params.username);
-    const input = managedAccount.partial({ pin: true }).parse(req.body);
+    const { username: nextUsername, name, role, pin } = managedAccount.partial({ pin: true }).parse(req.body);
     if (current === ownerUsername) throw new ApiError(403, 'The studio owner account is protected.');
-    if (input.username === ownerUsername) throw new ApiError(409, 'Username is already in use.');
-    const account = await store.updateManagedAccount(current, input);
+    if (!nextUsername) throw new ApiError(422, 'Enter a username.');
+    if (nextUsername === ownerUsername) throw new ApiError(409, 'Username is already in use.');
+    const account = await store.updateManagedAccount(current, { username: nextUsername, name, role, pin });
     if (!account) throw new ApiError(404, 'Account not found.');
     res.json(account);
   });
