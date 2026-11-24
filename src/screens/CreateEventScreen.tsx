@@ -244,7 +244,7 @@ export default function CreateEventScreen() {
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.keyboard}>
       <SafeAreaView edges={['top', 'bottom', 'left', 'right']} style={styles.modalBackdrop}><View style={styles.modalCard}>
         <View style={ui.between}><Text style={ui.heading}>Event Type</Text><IconButton name="x" label="Close event type selection" onPress={() => setTypePicker(false)} /></View>
-        <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={{ gap: 8 }} keyboardShouldPersistTaps="handled">{eventTypes.map(item => <Pressable key={item} accessibilityRole="radio" accessibilityState={{ checked: type === item }} onPress={() => { setType(item); setTypePicker(false); }} style={styles.clientChoice}><Text style={[ui.label, ui.flex]}>{item}</Text><Feather name={type === item ? 'check-circle' : 'circle'} size={20} color={colors.primary} /></Pressable>)}</ScrollView>
+        <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={{ gap: 8 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>{eventTypes.map(item => <Pressable key={item} accessibilityRole="radio" accessibilityState={{ checked: type === item }} onPress={() => { setType(item); setTypePicker(false); }} style={styles.clientChoice}><Text style={[ui.label, ui.flex]}>{item}</Text><Feather name={type === item ? 'check-circle' : 'circle'} size={20} color={colors.primary} /></Pressable>)}</ScrollView>
       </View></SafeAreaView>
       </KeyboardAvoidingView>
     </Modal>
