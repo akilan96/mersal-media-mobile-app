@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { ActivityIndicator, Alert, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -7,10 +7,12 @@ import Feather from '@expo/vector-icons/Feather';
 import { Brand, Button, Card, Header, Screen } from '../components/ui';
 import { AppearanceSetting } from '../components/AppearanceSetting';
 import { AmeyyWebsiteCard } from '../components/AmeyyWebsiteCard';
+import { useConfirmation } from '../components/ConfirmationDialog';
 import { MetricCard } from '../components/MetricCard';
+import { HomeGreeting } from '../components/HomeGreeting';
 import { useStudio } from '../state/StudioProvider';
 import { useStudioTheme } from '../theme';
-import { greeting, money } from '../domain/helpers';
+import { money } from '../domain/helpers';
 import type { ClientPaymentSummary, ClientPhotoSummary } from '../domain/types';
 import { ClientGalleryScreen } from './ClientPhotosScreen';
 
@@ -50,7 +52,7 @@ export function ClientHomeScreen() {
     <Brand />
     <LinearGradient colors={[colors.card, colors.mint]} style={[styles.homeHero, { borderColor: colors.border }]}>
       <View style={styles.heroText}>
-        <Text style={ui.body}>{greeting()}</Text>
+        <HomeGreeting />
         <Text accessibilityRole="header" style={ui.title}>{accountName || 'Welcome'}</Text>
         <Button title="Open gallery" icon="image" onPress={() => navigation.navigate('Photos')} />
       </View>
@@ -76,7 +78,7 @@ export function ClientHomeScreen() {
       </View>
       <View style={ui.flex}>
         <Text style={ui.heading}>You’re in safe hands</Text>
-        <Text style={ui.body}>Your login shows only the booking details linked to your account.</Text>
+        <Text style={ui.body}>Your login shows only the galleries &amp; booking details linked to your account.</Text>
       </View>
     </LinearGradient>
   </Screen>;
@@ -87,14 +89,13 @@ export function ClientFavouritesScreen() {
 }
 
 export function ClientSettingsScreen() {
+  const confirm = useConfirmation();
   const { lock } = useStudio();
   const { colors, ui } = useStudioTheme();
 
   function confirmLogout() {
-    Alert.alert('Log out?', 'Sign in again to access your gallery.', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Log out', style: 'destructive', onPress: lock },
-    ]);
+    confirm({ title: 'Log out?', message: 'Sign in again to access your gallery.', icon: 'log-out',
+      confirmLabel: 'Log out', destructive: true, onConfirm: lock });
   }
 
   return <Screen contentStyle={styles.settingsContent}>

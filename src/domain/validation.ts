@@ -1,4 +1,4 @@
-import { themeNames } from './types';
+import { maxGalleryLinksPerClient, themeNames } from './types';
 import type { Client, ClientInput, EventInput, PhotoGallery, Profile, StudioData, StudioEvent } from './types';
 export function validateProfile(profile: Profile) {
   if (!profile.name.trim() || !profile.studioName.trim()) throw new Error('Enter your name and studio name.');
@@ -73,7 +73,16 @@ export function addPhotoGallery(data: StudioData, gallery: PhotoGallery): Studio
   if (!data.clients.some(client => client.id === gallery.clientId)) throw new Error('Choose an existing client.');
   if (!isGoogleDriveLink(gallery.driveLink)) throw new Error('Enter a valid Google Drive link.');
   const galleries = data.photoGalleries ?? [];
-  return { ...data, photoGalleries: galleries.some(item => item.id === gallery.id)
+  const original = galleries.find(item => item.id === gallery.id);
+  const existing = galleries.filter(item => item.clientId === gallery.clientId && item.id !== gallery.id);
+  if (original?.clientId !== gallery.clientId && existing.length >= maxGalleryLinksPerClient) {
+    throw new Error(`This client can have up to ${maxGalleryLinksPerClient} Google Drive links.`);
+  }
+  if ((original?.clientId !== gallery.clientId || original.driveLink !== gallery.driveLink)
+    && existing.some(item => item.driveLink === gallery.driveLink)) {
+    throw new Error('This Drive link is already saved for the selected client.');
+  }
+  return { ...data, photoGalleries: original
     ? galleries.map(item => item.id === gallery.id ? gallery : item) : [...galleries, gallery] };
 }
 export function putEvent(data: StudioData, input: EventInput, id: string, createdAt: string): StudioData {

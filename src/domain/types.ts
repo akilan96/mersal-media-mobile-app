@@ -1,7 +1,8 @@
 import { daisyThemes } from '../daisyThemes';
+import type { NavigatorScreenParams } from '@react-navigation/native';
 export type EventStatus = 'Scheduled' | 'Editing' | 'Completed' | 'Cancelled';
 export type AccountRole = 'owner' | 'admin' | 'client';
-export type ManagedAccount = { username: string; name: string; role: Exclude<AccountRole, 'owner'>; clientId?: string };
+export type ManagedAccount = { username: string; name: string; role: Exclude<AccountRole, 'owner'>; clientId?: string; createdAt?: string };
 export type ClientPaymentSummary = { total: number; pending: number };
 export type EventType = string;
 export const defaultEventTypes = ['Marriage', 'Reception', 'Birthday Party', 'Corporate Event', 'Baby Shower', 'Portraits', 'Other'];
@@ -17,7 +18,7 @@ export interface StudioEvent {
 export interface Client { id: string; name: string; phone: string; email: string; notes: string; createdAt: string; inactive?: boolean }
 export interface Profile { name: string; studioName: string; username: string; phone: string; email: string }
 export interface PhotoGallery { id: string; clientId: string; driveLink: string; createdAt: string }
-export const maxGalleryLinksPerCreate = 10;
+export const maxGalleryLinksPerClient = 10;
 export type ClientGallery = Pick<PhotoGallery, 'id' | 'driveLink' | 'createdAt'>;
 export type ClientGalleryList = { galleries: ClientGallery[]; previewsEnabled: boolean };
 export type DrivePhoto = { id: string; name: string; hasThumbnail: boolean };
@@ -28,10 +29,10 @@ export interface StudioData { version: 1; profile: Profile | null; events: Studi
 export type EventInput = Omit<StudioEvent, 'id' | 'createdAt' | 'inactive'>;
 export type ClientInput = Omit<Client, 'id' | 'createdAt' | 'inactive'>;
 export type EventListFilter = 'all' | 'total' | 'upcoming' | 'completed' | 'editing';
-export type MainTabParamList = { Home: undefined; Events: { filter: EventListFilter; openedAt?: number } | undefined; Photos: undefined; Clients: undefined; Settings: undefined };
+export type MainTabParamList = { Home: undefined; Events: { filter: EventListFilter; openedAt?: number } | undefined; Photos: { addGalleryFor?: string } | undefined; Clients: undefined; Settings: undefined };
 export type RootStackParamList = {
   Accounts: undefined;
   Payments: undefined;
-  Welcome: undefined; Login: undefined; Main: undefined;
+  Welcome: undefined; Login: undefined; Main: NavigatorScreenParams<MainTabParamList> | undefined;
   CreateEvent: { eventId?: string } | undefined; EventDetails: { eventId: string };
 };

@@ -3,19 +3,20 @@ import { FlatList, Pressable, StyleSheet, View, type ListRenderItem, type Native
 import { useStudioTheme } from '../theme';
 import { Button, Screen } from './ui';
 
-const pageSize = 3;
+const pageSize = 5;
 
-export function PagedList<T extends { id: string }>({ items, scope, renderItem, header, empty, createAction }: {
+export function PagedList<T extends { id: string }>({ items, scope, renderItem, header, empty, createAction, manualLoadMore }: {
   items: T[];
   scope: string;
   renderItem: ListRenderItem<T>;
   header: ReactElement;
   empty: ReactElement;
   createAction?: { label: string; onPress: () => void };
+  manualLoadMore?: { hasMore: boolean; onPress: () => void };
 }) {
   const [page, setPage] = useState({ scope, limit: pageSize });
   const limit = page.scope === scope ? page.limit : pageSize;
-  const hasMore = limit < items.length;
+  const hasMore = manualLoadMore?.hasMore ?? limit < items.length;
   useEffect(() => {
     setPage(previous => previous.scope === scope ? previous : { scope, limit: pageSize });
   }, [scope]);
@@ -38,7 +39,7 @@ export function PagedList<T extends { id: string }>({ items, scope, renderItem, 
     <Screen scroll={false} contentStyle={styles.screen}>
       <FlatList
         style={styles.list}
-        data={items.slice(0, limit)}
+        data={manualLoadMore ? items : items.slice(0, limit)}
         keyExtractor={item => item.id}
         renderItem={renderItem}
         initialNumToRender={pageSize}
@@ -46,11 +47,11 @@ export function PagedList<T extends { id: string }>({ items, scope, renderItem, 
         ListHeaderComponentStyle={styles.header}
         ListEmptyComponent={empty}
         ItemSeparatorComponent={Separator}
-        ListFooterComponent={hasMore ? <View style={styles.footer}><Button title="Load more" icon="chevron-down" variant="ghost" onPress={loadMore} /></View> : undefined}
+        ListFooterComponent={hasMore ? <View style={styles.footer}><Button title="Load more" icon="chevron-down" variant="ghost" onPress={manualLoadMore?.onPress ?? loadMore} /></View> : undefined}
         contentContainerStyle={[styles.content, createAction && styles.contentWithAction]}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
-        onScroll={hasMore ? onScroll : undefined}
+        onScroll={hasMore && !manualLoadMore ? onScroll : undefined}
         scrollEventThrottle={32}
       />
       {createAction && <FloatingCreateButton {...createAction} />}

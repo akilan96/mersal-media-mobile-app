@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { defaultEventTypes, maxGalleryLinksPerCreate, type ThemeName } from '../domain/types';
+import { defaultEventTypes, maxGalleryLinksPerClient, type ThemeName } from '../domain/types';
 import { AppState } from 'react-native';
 import * as Crypto from 'expo-crypto';
 import type { AccountRole, ClientGalleryList, ClientInput, ClientPaymentSummary, DrivePhotoPage, EventInput, EventStatus, ManagedAccount, Profile, StudioData, StudioEvent } from '../domain/types';
@@ -40,7 +40,7 @@ export interface StudioContext {
   setHomePhoto(uri?: string): Promise<void>;
   addEventType(name: string): Promise<void>;
   savePhotoGallery(clientId: string, driveLink: string, id?: string): Promise<void>;
-  savePhotoGalleries(clientId: string, driveLinks: string[]): Promise<void>;
+  savePhotoGalleries(clientId: string, driveLinks: string[], editingId?: string): Promise<void>;
   removePhotoGallery(id: string): Promise<void>;
 }
 const Context = createContext<StudioContext | null>(null);
@@ -127,14 +127,20 @@ function LocalStudioProvider({ children }: { children: React.ReactNode }) {
     async removePhotoGallery(id) {
       await commit(previous => ({ ...previous, photoGalleries: (previous.photoGalleries ?? []).filter(gallery => gallery.id !== id) }));
     },
-    async savePhotoGalleries(clientId, driveLinks) {
+    async savePhotoGalleries(clientId, driveLinks, editingId) {
       const links = driveLinks.map(link => link.trim());
-      if (!links.length || links.length > maxGalleryLinksPerCreate || new Set(links).size !== links.length) {
-        throw new Error(`Enter 1–${maxGalleryLinksPerCreate} different Google Drive links.`);
+      if (!links.length || links.length > maxGalleryLinksPerClient || new Set(links).size !== links.length) {
+        throw new Error(`Enter 1–${maxGalleryLinksPerClient} different Google Drive links.`);
       }
       const createdAt = new Date().toISOString();
       const galleries = links.map(driveLink => ({ id: Crypto.randomUUID(), clientId, driveLink, createdAt }));
-      await commit(previous => galleries.reduce(addPhotoGallery, previous));
+      await commit(previous => {
+        if (!editingId) return galleries.reduce(addPhotoGallery, previous);
+        const prior = previous.photoGalleries?.find(gallery => gallery.id === editingId);
+        if (!prior) throw new Error('Gallery not found.');
+        const updated = { ...prior, clientId, driveLink: links[0] };
+        return galleries.slice(1).reduce(addPhotoGallery, addPhotoGallery(previous, updated));
+      });
     },
     async addEventType(name) {
       const clean = name.trim();

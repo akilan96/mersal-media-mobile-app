@@ -19,5 +19,5 @@ export const initials = (name: string) => name.trim().split(/\s+/).slice(0, 2).m
 export const upcomingEvents = (events: StudioEvent[], now = new Date()) => events.filter(e => !e.inactive && e.status === 'Scheduled' && new Date(e.date).getTime() >= now.getTime()).sort((a, b) => Date.parse(a.date) - Date.parse(b.date));
 export function greeting() {
   const hour = new Date().getHours();
-  return hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : hour < 21 ? 'Good evening' : 'Good night';
+  return hour < 12 ? 'Good Morning' : hour < 17 ? 'Good Afternoon' : hour < 21 ? 'Good Evening' : 'Good Night';
 }

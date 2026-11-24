@@ -10,7 +10,7 @@ type Workspace = Omit<StudioData, 'version' | 'events' | 'clients' | 'homePhoto'
   _id: string;
   revision: number;
 };
-type User = { _id: string; username: string; pin: string; name?: string; role?: ManagedAccount['role']; clientId?: string; attempts?: number; attemptUntil?: number; profile?: StudioData['profile'] };
+type User = { _id: string; username: string; pin: string; name?: string; role?: ManagedAccount['role']; clientId?: string; createdAt?: string; attempts?: number; attemptUntil?: number; profile?: StudioData['profile'] };
 type EventRecord = Omit<StudioEvent, 'id' | 'payments'> & { _id: string };
 type ClientRecord = Omit<Client, 'id'> & { _id: string };
 type PaymentRecord = Payment & { _id: string; eventId: string };
@@ -194,11 +194,11 @@ export function createMongoStore(uri: string | undefined, dbName = 'mersal_media
     },
     async listManagedAccounts() {
       const { auth } = await database();
-      const accounts = await auth.find({}, { projection: { username: 1, name: 1, role: 1, clientId: 1, 'profile.name': 1 } })
+      const accounts = await auth.find({}, { projection: { username: 1, name: 1, role: 1, clientId: 1, createdAt: 1, 'profile.name': 1 } })
         .sort({ username: 1 }).toArray();
       return accounts.map(account => ({
         username: account.username, name: account.name ?? account.profile?.name ?? account.username,
-        role: account.role === 'admin' ? 'admin' : 'client', clientId: account.clientId,
+        role: account.role === 'admin' ? 'admin' : 'client', clientId: account.clientId, createdAt: account.createdAt,
       }));
     },
     async createManagedAccount(id, account) {
@@ -229,7 +229,7 @@ export function createMongoStore(uri: string | undefined, dbName = 'mersal_media
             await Session.deleteMany({ studioId: prior._id }, { session });
           }
           return { username: input.username, name: input.name, role: input.role,
-            clientId: input.role === 'client' ? prior.clientId : undefined };
+            clientId: input.role === 'client' ? prior.clientId : undefined, createdAt: prior.createdAt };
         });
       } catch (error) {
         if (error instanceof mongoose.mongo.MongoServerError && error.code === 11000) throw new StoreError(409, 'Username is already in use.');

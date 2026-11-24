@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Alert, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AmeyyWebsiteCard } from '../components/AmeyyWebsiteCard';
+import { useConfirmation } from '../components/ConfirmationDialog';
 import Feather from '@expo/vector-icons/Feather';
 import { Brand, Button, CameraArt, Card, ErrorMessage, Field, Header, IconButton, Screen } from '../components/ui';
 import { useToast } from '../components/Toast';
@@ -21,6 +22,7 @@ const failureMessage = (error: unknown) => error instanceof Error ? error.messag
 const blankProfile: Profile = { name: '', studioName: '', username: '', phone: '', email: '' };
 
 export default function SettingsScreen() {
+  const confirm = useConfirmation();
   const navigation = useStudioNavigation();
   const showToast = useToast();
   const { colors, ui } = useStudioTheme();
@@ -28,6 +30,7 @@ export default function SettingsScreen() {
  
   const { cloud, role, data, saveProfile, changePin, lock, setHomePhoto, addEventType } = useStudio();
   const [settingsBusy, setSettingsBusy] = useState(false);
+  const [photoAction, setPhotoAction] = useState<'upload' | 'restore' | null>(null);
   const [settingsError, setSettingsError] = useState('');
   const [eventType, setEventType] = useState('');
   const [eventTypeError, setEventTypeError] = useState('');
@@ -37,7 +40,7 @@ export default function SettingsScreen() {
     setSettingsError('');
     try { await action(); }
     catch (cause) { setSettingsError(failureMessage(cause)); }
-    finally { setSettingsBusy(false); }
+    finally { setSettingsBusy(false); setPhotoAction(null); }
   }
 
   async function removeHomePhotoFile(uri?: string) {
@@ -52,6 +55,7 @@ export default function SettingsScreen() {
         mediaTypes: ['images'], quality: 0.8, base64: Platform.OS === 'web',
       });
       if (result.canceled) return;
+      setPhotoAction('upload');
       const photo = result.assets[0];
       if (Platform.OS === 'web') {
         if (!photo.base64 || photo.base64.length > 2_000_000) throw new Error('Choose a smaller photo for the browser preview.');
@@ -136,9 +140,8 @@ export default function SettingsScreen() {
   }
 
   function confirmLogout() {
-    Alert.alert('Log out?', cloud ? 'Your studio records stay saved online.' : 'Your events and clients stay saved on this device. Enter your PIN to sign in again.', [
-      { text: 'Cancel', style: 'cancel' }, { text: 'Log out', style: 'destructive', onPress: lock },
-    ]);
+    confirm({ title: 'Log out?', message: cloud ? 'Your studio records stay saved online.' : 'Enter your PIN to sign in again.',
+      icon: 'log-out', confirmLabel: 'Log out', destructive: true, onConfirm: lock });
   }
 
   return (
@@ -205,9 +208,12 @@ export default function SettingsScreen() {
               {panel === 'photo' && <Card style={ui.gap}>
         <Text style={ui.label}>{data.homePhoto ? 'Current Home photo' : 'Default Home photo'}</Text>
         <CameraArt uri={data.homePhoto} size={120} />
-        <Button title="Choose Photo" icon="image" variant="secondary" disabled={settingsBusy} onPress={chooseHomePhoto} />
-        {data.homePhoto && <Button title="Restore Default Photo" variant="ghost" disabled={settingsBusy}
+        <Button title={photoAction === 'upload' ? (cloud ? 'Uploading photo…' : 'Saving photo…') : 'Choose Photo'}
+          icon="image" variant="secondary" disabled={settingsBusy} loading={photoAction === 'upload'} onPress={chooseHomePhoto} />
+        {data.homePhoto && <Button title={photoAction === 'restore' ? 'Restoring photo…' : 'Restore Default Photo'}
+          variant="ghost" disabled={settingsBusy} loading={photoAction === 'restore'}
           onPress={() => void updateSettings(async () => {
+            setPhotoAction('restore');
             await setHomePhoto(undefined);
             await removeHomePhotoFile(data.homePhoto);
             setPanel(null);

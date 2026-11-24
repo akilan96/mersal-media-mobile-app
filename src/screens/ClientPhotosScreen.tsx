@@ -3,7 +3,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import Feather from '@expo/vector-icons/Feather';
-import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import { GoogleDriveIcon } from '../components/GoogleDriveIcon';
 import { Button, Card, EmptyState, ErrorMessage, Header, Screen } from '../components/ui';
 import { drivePhotoPageSize, type ClientGallery, type ClientGalleryList, type DrivePhoto } from '../domain/types';
 import { formatDate } from '../domain/helpers';
@@ -209,7 +209,7 @@ function GalleryPreview({ gallery, favourites, previewsEnabled, onBack, onRefres
     <Header title={favourites ? 'Favourites' : 'Gallery'} onBack={onBack} right={
       <Pressable accessibilityRole="button" accessibilityLabel="Open in Google Drive" onPress={openDrive}
         style={({ pressed }) => [styles.driveAction, { backgroundColor: colors.mint, borderColor: colors.border }, pressed && styles.pressed]}>
-        <MaterialCommunityIcons name="google-drive" size={23} color={colors.primaryDark} />
+        <GoogleDriveIcon size={25} />
       </Pressable>
     } />
     {!!linkError && <ErrorMessage message={linkError} />}

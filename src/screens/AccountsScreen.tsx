@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Keyboard, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Keyboard, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
+import { GoogleDriveIcon } from '../components/GoogleDriveIcon';
 import { Badge, Button, Card, EmptyState, ErrorMessage, Field, Header, Screen } from '../components/ui';
 import { PagedList } from '../components/PagedList';
 import { PinField } from '../components/PinField';
 import { useToast } from '../components/Toast';
+import { useConfirmation } from '../components/ConfirmationDialog';
 import type { ManagedAccount } from '../domain/types';
 import { useStudioNavigation } from '../navigation/useStudioNavigation';
 import { useStudio } from '../state/StudioProvider';
@@ -15,8 +17,11 @@ const roles = [
   { value: 'client', title: 'Client', icon: 'user', description: 'Access Photos, Favourites, and Settings.' },
 ] as const;
 const errorText = (error: unknown) => error instanceof Error ? error.message : 'Please try again.';
+const accountPageSize = 5;
+type AccountGroup = { id: string; clientId?: string; clientName?: string; accounts: ManagedAccount[] };
 
 export default function AccountsScreen() {
+  const confirm = useConfirmation();
   const navigation = useStudioNavigation();
   const { colors, ui } = useStudioTheme();
   const styles = makeStyles(colors);
@@ -24,6 +29,8 @@ export default function AccountsScreen() {
   const showToast = useToast();
   const [accounts, setAccounts] = useState<ManagedAccount[]>([]);
   const [query, setQuery] = useState('');
+  const [accountFilter, setAccountFilter] = useState<ManagedAccount['role']>('client');
+  const [accountLimit, setAccountLimit] = useState(accountPageSize);
   const [loadError, setLoadError] = useState('');
   const [loading, setLoading] = useState(true);
   const [loadVersion, setLoadVersion] = useState(0);
@@ -68,11 +75,29 @@ export default function AccountsScreen() {
   const matchingClients = clientTerm ? activeClients.filter(client =>
     `${client.name} ${client.phone} ${client.email}`.toLowerCase().includes(clientTerm)) : activeClients.slice(0, 5);
   const selectedClient = data.clients.find(client => client.id === linkedClientId);
-  const displayedAccounts = accounts
-    .filter(account => [account.name, account.username, '@' + account.username, account.role]
+  const clientNames = new Map(data.clients.map(client => [client.id, client.name]));
+  const clientLoginCounts = new Map<string, number>();
+  for (const account of accounts) {
+    if (account.role === 'client' && account.clientId) {
+      clientLoginCounts.set(account.clientId, (clientLoginCounts.get(account.clientId) ?? 0) + 1);
+    }
+  }
+  const matchingAccounts = accounts.filter(account => account.role === accountFilter
+    && [account.name, account.username, '@' + account.username, account.role, clientNames.get(account.clientId ?? '') ?? '']
       .some(value => value.toLowerCase().includes(term)))
-    .sort((a, b) => a.name.localeCompare(b.name) || a.username.localeCompare(b.username))
-    .map(account => ({ ...account, id: account.username }));
+    .sort((a, b) => (Date.parse(b.createdAt ?? '') || 0) - (Date.parse(a.createdAt ?? '') || 0)
+      || a.name.localeCompare(b.name) || a.username.localeCompare(b.username));
+  const accountGroups = new Map<string, AccountGroup>();
+  for (const account of matchingAccounts.slice(0, accountLimit)) {
+    const clientId = account.role === 'client' ? account.clientId : undefined;
+    const id = clientId ? `client:${clientId}` : `account:${account.username}`;
+    const group = accountGroups.get(id);
+    if (group) group.accounts.push(account);
+    else accountGroups.set(id, {
+      id, clientId, clientName: clientId ? clientNames.get(clientId) ?? 'Linked client' : undefined, accounts: [account],
+    });
+  }
+  const displayedGroups = [...accountGroups.values()];
 
   function openForm(account?: ManagedAccount) {
     Keyboard.dismiss();
@@ -104,6 +129,8 @@ export default function AccountsScreen() {
       setAccounts(previous => [...previous.filter(account => account.username !== (editing?.username ?? saved.username)), saved]);
       setPin('');
       setQuery('');
+      setAccountFilter(saved.role);
+      setAccountLimit(accountPageSize);
       setFormVisible(false);
       showToast(editing ? 'Account updated' : saved.role === 'admin' ? 'Admin account created' : 'Client account created');
     } catch (error) { setSaveError(errorText(error)); }
@@ -112,9 +139,8 @@ export default function AccountsScreen() {
 
   function confirmDelete(account: ManagedAccount) {
     if (!deleteAccount || deleting) return;
-    Alert.alert('Delete account?', `@${account.username} will lose sign-in access. Their linked client record stays saved.`, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: async () => {
+    confirm({ title: 'Delete account?', message: `@${account.username} will lose sign-in access. Their linked client record stays saved.`,
+      icon: 'trash-2', confirmLabel: 'Delete', destructive: true, onConfirm: async () => {
         setDeleting(account.username);
         setActionError('');
         try {
@@ -123,8 +149,7 @@ export default function AccountsScreen() {
           showToast('Account deleted');
         } catch (error) { setActionError(errorText(error)); }
         finally { setDeleting(undefined); }
-      } },
-    ]);
+      } });
   }
 
   function openLink(account: ManagedAccount) {
@@ -149,53 +174,122 @@ export default function AccountsScreen() {
 
   return <>
     <PagedList
-      items={displayedAccounts}
-      scope={term}
+      items={displayedGroups}
+      scope={JSON.stringify([accountFilter, term])}
+      manualLoadMore={{ hasMore: accountLimit < matchingAccounts.length,
+        onPress: () => setAccountLimit(limit => Math.min(limit + accountPageSize, matchingAccounts.length)) }}
       createAction={createAccount && !loading ? { label: 'Create account', onPress: () => openForm() } : undefined}
       header={<View style={ui.gap}>
         <Header title="Accounts" onBack={() => navigation.goBack()} />
-        <Field icon="search" placeholder="Search name, username, or role" accessibilityLabel="Search accounts"
-          value={query} onChangeText={setQuery} returnKeyType="search" autoCapitalize="none" />
+        <View style={styles.accountFilters}>
+          {roles.map(option => {
+            const selected = accountFilter === option.value;
+            return <Pressable key={option.value} accessibilityRole="button"
+              accessibilityState={{ selected }} onPress={() => {
+                if (!selected) { setAccountFilter(option.value); setAccountLimit(accountPageSize); }
+              }}
+              style={({ pressed }) => [styles.accountFilter, selected && styles.selectedFilter, pressed && styles.actionMuted]}>
+              <View style={[styles.filterIcon, selected && styles.selectedFilterIcon]}>
+                <Feather name={option.icon} size={17} color={colors.primaryDark} />
+              </View>
+              <Text style={[styles.filterLabel, selected && { color: colors.onPrimary }]}>{option.title}s</Text>
+            </Pressable>;
+          })}
+        </View>
+        <Field icon="search" placeholder="Search client, account, or role" accessibilityLabel="Search accounts by client, account, or role"
+          value={query} onChangeText={value => { setQuery(value); setAccountLimit(accountPageSize); }}
+          returnKeyType="search" autoCapitalize="none" />
+        {matchingAccounts.length > accountPageSize && <Text style={ui.small}>
+          Showing {Math.min(accountLimit, matchingAccounts.length)} of {matchingAccounts.length} logins
+        </Text>}
         {!!actionError && <ErrorMessage message={actionError} />}
       </View>}
       empty={loading ? <ActivityIndicator color={colors.primary} accessibilityLabel="Loading studio accounts" />
         : loadError ? <View style={ui.gap}>
           <ErrorMessage message={loadError} />
           <Button title="Retry" variant="secondary" onPress={() => setLoadVersion(version => version + 1)} />
-        </View> : <EmptyState icon="users" title={term ? 'No matching accounts' : 'No accounts yet'}
-          description={term ? 'Try a different name, username, or role.' : 'Use the plus button to create an admin or client account.'} />}
-      renderItem={({ item }) => <Card style={styles.accountCard}>
-        <View style={ui.between}>
-          <View style={styles.accountIcon}><Feather name={item.role === 'admin' ? 'shield' : 'user'} size={19} color={colors.primaryDark} /></View>
+        </View> : <EmptyState icon="users" title={term ? 'No matching accounts' : accountFilter === 'admin' ? 'No admin accounts yet' : 'No client accounts yet'}
+          description={term ? 'Try another client name, username, or role.' : 'Use the plus button to create an admin or client account.'} />}
+      renderItem={({ item }) => {
+        const loginCount = item.clientId ? clientLoginCounts.get(item.clientId) ?? item.accounts.length : item.accounts.length;
+        return <Card style={styles.accountCard}>
+        {item.clientName && <View style={styles.groupHeader}>
+          <View style={styles.accountIcon}><Feather name="folder" size={20} color={colors.primaryDark} /></View>
           <View style={ui.flex}>
-            <Text style={ui.label}>{item.name}</Text>
-            <Text style={ui.small}>@{item.username}</Text>
+            <Text accessibilityRole="header" style={ui.heading}>{item.clientName}</Text>
+            <Text style={ui.small}>Shared gallery access</Text>
           </View>
-          <Badge label={item.role === 'admin' ? 'Admin' : 'Client'} />
-        </View>
-        {item.role === 'client' && linkClientAccount && <Button
-          title={item.clientId ? 'Change linked client' : 'Link client'} icon="link" variant="secondary"
-          onPress={() => openLink(item)} />}
-        <View style={styles.accountActions}>
-          {updateAccount && <Button title="Edit" icon="edit-2" variant="ghost" disabled={!!deleting} onPress={() => openForm(item)} />}
-          {deleteAccount && <Button title="Delete" icon="trash-2" variant="danger" disabled={!!deleting}
-            loading={deleting === item.username} onPress={() => confirmDelete(item)} />}
-        </View>
-      </Card>}
+          <View style={styles.loginCount} accessible
+            accessibilityLabel={`${loginCount} ${loginCount === 1 ? 'login' : 'logins'}`}>
+            <View style={styles.loginCountNumberBox}>
+              <Text style={styles.loginCountNumber}>{loginCount}</Text>
+            </View>
+            <Text style={styles.loginCountLabel}>{loginCount === 1 ? 'login' : 'logins'}</Text>
+          </View>
+        </View>}
+        {item.clientId && clientNames.has(item.clientId) && <Pressable accessibilityRole="button"
+          accessibilityLabel={`Add Drive gallery for ${item.clientName}`}
+          onPress={() => navigation.popTo('Main', { screen: 'Photos', params: { addGalleryFor: item.clientId } })}
+          style={({ pressed }) => [styles.galleryButton, pressed && styles.actionMuted]}>
+          <GoogleDriveIcon size={21} />
+          <Text style={styles.galleryButtonText}>Add Drive Link</Text>
+        </Pressable>}
+        {item.accounts.map(account => <View key={account.username} style={[styles.member, !!item.clientName && styles.groupMember]}>
+          <View style={ui.between}>
+            <View style={styles.accountIcon}><Feather name={account.role === 'admin' ? 'shield' : 'user'} size={19} color={colors.primaryDark} /></View>
+            <View style={ui.flex}>
+              <Text style={ui.label}>{account.name}</Text>
+              <Text style={ui.small}>@{account.username}</Text>
+            </View>
+            {!item.clientName && <Badge label={account.role === 'admin' ? 'Admin' : 'Unlinked'} tone={account.role === 'admin' ? 'teal' : 'neutral'} />}
+          </View>
+          <View style={styles.accountActions}>
+            {account.role === 'client' && linkClientAccount && <Pressable accessibilityRole="button"
+              accessibilityLabel={`${account.clientId ? 'Change linked client for' : 'Link client to'} ${account.name}`}
+              disabled={!!deleting} onPress={() => openLink(account)}
+              style={({ pressed }) => [styles.actionTarget, (pressed || deleting) && styles.actionMuted]}>
+              <Feather name="link" size={17} color={colors.primaryDark} />
+            </Pressable>}
+            {updateAccount && <Pressable accessibilityRole="button" accessibilityLabel={`Edit ${account.name}`}
+              disabled={!!deleting} onPress={() => openForm(account)}
+              style={({ pressed }) => [styles.actionTarget, (pressed || deleting) && styles.actionMuted]}>
+              <Feather name="edit-2" size={17} color={colors.primaryDark} />
+            </Pressable>}
+            {deleteAccount && <Pressable accessibilityRole="button" accessibilityLabel={`Delete ${account.name}`}
+              accessibilityState={{ disabled: !!deleting, busy: deleting === account.username }}
+              disabled={!!deleting} onPress={() => confirmDelete(account)}
+              style={({ pressed }) => [styles.actionTarget, pressed && styles.actionMuted]}>
+              {deleting === account.username ? <ActivityIndicator size="small" color={colors.error} />
+                : <Feather name="trash-2" size={17} color={colors.error} />}
+            </Pressable>}
+          </View>
+        </View>)}
+      </Card>;
+      }}
     />
     <Modal visible={formVisible} animationType="slide" presentationStyle="pageSheet" onRequestClose={closeForm}>
       <Screen>
         <Header title={editing ? 'Edit Account' : 'Create Account'} onBack={closeForm} />
         <Card style={ui.gap}>
           <Text style={ui.heading}>Account type</Text>
-          {roles.map(option => <Pressable key={option.value} accessibilityRole="radio"
-            accessibilityState={{ checked: role === option.value, disabled: saving }}
-            disabled={saving} style={[styles.roleOption, role === option.value && styles.selected]}
-            onPress={() => { setRole(option.value); setSaveError(''); }}>
-            <View style={styles.accountIcon}><Feather name={option.icon} size={19} color={colors.primaryDark} /></View>
-            <View style={ui.flex}><Text style={ui.label}>{option.title}</Text><Text style={ui.small}>{option.description}</Text></View>
-            <Feather name={role === option.value ? 'check-circle' : 'circle'} size={19} color={colors.primaryDark} />
-          </Pressable>)}
+          {roles.map(option => {
+            const selected = role === option.value;
+            return <Pressable key={option.value} accessibilityRole="radio"
+              accessibilityState={{ checked: selected, disabled: saving }}
+              disabled={saving} style={({ pressed }) => [styles.typeCard, selected && styles.selected, pressed && styles.actionMuted]}
+              onPress={() => { setRole(option.value); setSaveError(''); }}>
+              <View style={[styles.accountIcon, selected && styles.selectedRoleIcon]}>
+                <Feather name={option.icon} size={21} color={selected ? colors.onPrimary : colors.primaryDark} />
+              </View>
+              <View style={ui.flex}>
+                <Text style={styles.typeTitle}>{option.title}</Text>
+                <Text style={ui.small}>{option.description}</Text>
+              </View>
+              <View style={[styles.radioMarker, selected && styles.selectedRoleIcon]}>
+                {selected && <Feather name="check" size={13} color={colors.onPrimary} />}
+              </View>
+            </Pressable>;
+          })}
         </Card>
         <Card style={ui.gap}>
           <Field label="Name" icon="user" value={name} onChangeText={setName} maxLength={100} editable={!saving} />
@@ -235,9 +329,37 @@ export default function AccountsScreen() {
 }
 
 const makeStyles = (colors: Palette) => StyleSheet.create({
-  accountCard: { gap: 10 },
-  accountActions: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 8 },
+  accountCard: { padding: 0, overflow: 'hidden' },
+  accountFilters: { flexDirection: 'row', gap: 5, padding: 5, borderRadius: 18, borderWidth: 1,
+    borderColor: colors.border, backgroundColor: colors.card },
+  accountFilter: { flex: 1, minHeight: 47, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 8, borderRadius: 13 },
+  selectedFilter: { backgroundColor: colors.primary },
+  filterIcon: { width: 28, height: 28, borderRadius: 9, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.mint },
+  selectedFilterIcon: { backgroundColor: colors.card },
+  filterLabel: { color: colors.text, fontFamily: 'InterBold', fontSize: 14 },
+  groupHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 13, backgroundColor: colors.mint },
+  loginCount: { flexDirection: 'row', alignItems: 'center', gap: 6, padding: 4, paddingRight: 8,
+    borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card },
+  loginCountNumberBox: { minWidth: 24, minHeight: 24, paddingHorizontal: 4, borderRadius: 8,
+    alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary },
+  loginCountNumber: { color: colors.onPrimary, fontFamily: 'InterExtraBold', fontSize: 13, fontVariant: ['tabular-nums'] },
+  loginCountLabel: { color: colors.primaryDark, fontFamily: 'InterSemiBold', fontSize: 11 },
+  member: { paddingTop: 12, paddingHorizontal: 13 },
+  groupMember: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
+  accountActions: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 3 },
+  actionTarget: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  actionMuted: { opacity: 0.55 },
+  galleryButton: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start',
+    marginHorizontal: 13, marginVertical: 8, paddingHorizontal: 12, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card },
+  galleryButtonText: { color: colors.primaryDark, fontFamily: 'InterBold', fontSize: 13 },
   accountIcon: { width: 42, height: 42, borderRadius: 12, backgroundColor: colors.mint, alignItems: 'center', justifyContent: 'center' },
   roleOption: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10, borderWidth: 1, borderColor: colors.border, borderRadius: 14 },
+  typeCard: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, minHeight: 68,
+    borderWidth: 1, borderColor: colors.border, borderRadius: 16, backgroundColor: colors.card },
+  typeTitle: { color: colors.text, fontFamily: 'InterExtraBold', fontSize: 15, marginBottom: 2 },
+  radioMarker: { width: 22, height: 22, borderRadius: 11, borderWidth: 1, borderColor: colors.border,
+    alignItems: 'center', justifyContent: 'center', backgroundColor: colors.card },
+  selectedRoleIcon: { backgroundColor: colors.primary, borderColor: colors.primary },
   selected: { borderColor: colors.primary, backgroundColor: colors.mint },
 });

@@ -1,4 +1,4 @@
-import React, { type ComponentProps, type ReactNode, useState } from 'react';
+import React, { type ComponentProps, type ReactElement, type ReactNode, useState } from 'react';
 import { ActivityIndicator, Image, KeyboardAvoidingView, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View, type StyleProp, type TextInputProps, type TextStyle, type ViewStyle } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Feather from '@expo/vector-icons/Feather';
@@ -33,7 +33,7 @@ export function Button({ title, onPress, variant = 'primary', icon, loading = fa
     {variant === 'primary' ? <LinearGradient colors={[colors.primary, colors.primary]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.buttonInner}>{child}</LinearGradient> : <View style={styles.buttonInner}>{child}</View>}
   </Pressable>;
 }
-export function Field({ label, labelStyle, error, icon, style, onFocus, onBlur, variant, ...props }: TextInputProps & { label?: string; labelStyle?: StyleProp<TextStyle>; error?: string; icon?: IconName; variant?: 'studio-form' }) {
+export function Field({ label, labelStyle, error, icon, style, onFocus, onBlur, variant, ...props }: TextInputProps & { label?: string; labelStyle?: StyleProp<TextStyle>; error?: string; icon?: IconName | ReactElement; variant?: 'studio-form' }) {
   const { colors, ui } = useStudioTheme();
   const styles = makeStyles(colors);
  
@@ -43,7 +43,8 @@ export function Field({ label, labelStyle, error, icon, style, onFocus, onBlur, 
     <View style={[styles.fieldShell, variant === 'studio-form' && styles.studioFieldShell, focused && { borderColor: colors.primary, backgroundColor: colors.card }, !!error && { borderColor: colors.error }, props.editable === false && { opacity: 0.6 }]}>
       {icon && (
         <View style={[styles.fieldIcon, variant === 'studio-form' && icon === 'map-pin' && styles.locationIcon]}>
-          <Feather name={icon} size={18} color={variant === 'studio-form' && icon === 'map-pin' ? '#15803D' : colors.primary} />
+          {typeof icon === 'string' ? <Feather name={icon} size={18}
+            color={variant === 'studio-form' && icon === 'map-pin' ? '#15803D' : colors.primary} /> : icon}
         </View>
       )}
       <TextInput {...props} accessibilityLabel={props.accessibilityLabel ?? label ?? props.placeholder} placeholderTextColor={colors.muted} selectionColor={colors.primary} onFocus={event => { setFocused(true); onFocus?.(event); }} onBlur={event => { setFocused(false); onBlur?.(event); }} style={[styles.field, props.multiline && { minHeight: 106, textAlignVertical: 'top', paddingTop: 14 }, style]} />

@@ -7,6 +7,7 @@ import { Inter_600SemiBold } from '@expo-google-fonts/inter/600SemiBold';
 import { Inter_700Bold } from '@expo-google-fonts/inter/700Bold';
 import { Inter_800ExtraBold } from '@expo-google-fonts/inter/800ExtraBold';
 import { ToastProvider } from './src/components/Toast';
+import { ConfirmationProvider } from './src/components/ConfirmationDialog';
 import { daisyThemes } from './src/daisyThemes';
 import React from 'react';
 import { ActivityIndicator, Modal, StyleSheet, Text, View } from 'react-native';
@@ -26,7 +27,7 @@ function ThemedStudio() {
   const { data, role, deviceTheme } = useStudio();
   const selectedTheme = deviceTheme ?? (role === 'client' ? 'light' : data.theme);
   const theme = settingsThemes.find(option => option === selectedTheme) ?? 'light';
-  return <ThemeContext.Provider value={theme}><StatusBar style={theme !== 'pancake' && daisyThemes[theme].dark ? 'light' : 'dark'} /><ToastProvider><StudioApp /></ToastProvider></ThemeContext.Provider>;
+  return <ThemeContext.Provider value={theme}><StatusBar style={theme !== 'pancake' && daisyThemes[theme].dark ? 'light' : 'dark'} /><ToastProvider><ConfirmationProvider><StudioApp /></ConfirmationProvider></ToastProvider></ThemeContext.Provider>;
 }
 function StudioApp() {
   useEventReminders();

@@ -1,4 +1,4 @@
-import { Schema, type Connection } from 'mongoose';
+import { mongo, Schema, type Connection } from 'mongoose';
 import { themeNames } from '../src/domain/types';
 
 const nested = { _id: false, id: false } as const;
@@ -75,7 +75,11 @@ sessionSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 const homePhotoSchema = new Schema({
   _id: { type: String, required: true },
   contentType: { type: String, required: true, enum: ['image/jpeg', 'image/png', 'image/webp'] },
-  bytes: { type: Buffer, required: true, validate: (bytes: Buffer) => bytes.length > 0 && bytes.length <= 4 * 1024 * 1024 },
+  bytes: { type: Buffer, required: true, validate: (bytes: Buffer | InstanceType<typeof mongo.Binary>) => {
+    // Mongoose casts update values to BSON Binary before running query validators.
+    const size = bytes instanceof mongo.Binary ? bytes.length() : bytes.length;
+    return size > 0 && size <= 4 * 1024 * 1024;
+  } },
 }, collection);
 
 const userSchema = new Schema({

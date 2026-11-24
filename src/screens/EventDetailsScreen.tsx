@@ -1,4 +1,5 @@
 import { useToast } from '../components/Toast';
+import { useConfirmation } from '../components/ConfirmationDialog';
 import React, { useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Keyboard, Modal, StyleSheet, Text, TextInput, View } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
@@ -27,6 +28,7 @@ async function readFont(moduleId: number) {
 }
 
 export default function EventDetailsScreen() {
+  const confirm = useConfirmation();
   const showToast = useToast();
   const paymentSound = useAudioPlayer(require('../../assets/audio/payment.mp3'));
   const { colors, ui } = useStudioTheme();
@@ -66,24 +68,26 @@ export default function EventDetailsScreen() {
 
   function confirmCancellation() {
     if (!event || busy || event.status === 'Cancelled') return;
-    Alert.alert('Cancel this event?', 'The booking and payments stay on record. Upcoming reminders will be cleared.', [
-      { text: 'Keep booking', style: 'cancel' },
-      { text: 'Cancel event', style: 'destructive', onPress: () => { void updateStatus('Cancelled'); } },
-    ]);
+    confirm({ title: 'Cancel this event?', message: 'The booking and payments stay on record. Upcoming reminders will be cleared.',
+      icon: 'x-circle', cancelLabel: 'Keep booking', confirmLabel: 'Cancel event', destructive: true,
+      onConfirm: () => { void updateStatus('Cancelled'); } });
   }
   function confirmDelete() {
     if (!event || busy) return;
-    Alert.alert('Make this event inactive?', `“${event.title}” will be hidden from the list. You can still find it by searching.`, [
-      { text: 'Keep event', style: 'cancel' },
-      { text: 'Make inactive', style: 'destructive', onPress: async () => {
+    confirm({ title: 'Make this event inactive?', message: `“${event.title}” will be hidden from the list. You can still find it by searching.`,
+      icon: 'eye-off', cancelLabel: 'Keep event', confirmLabel: 'Make inactive', destructive: true, onConfirm: async () => {
         setBusy(true); setError('');
         try {
           await deleteEvent(event.id);
           navigation.popToTop();
           showToast('Event marked inactive');
         } catch (cause) { fail(cause); } finally { setBusy(false); }
-      } },
-    ]);
+      } });
+  }
+  function confirmShare() {
+    if (!event || busy || pdfInProgress.current) return;
+    confirm({ title: 'Share event PDF?', message: `Create a PDF for “${event.title}” and choose where to share it.`,
+      icon: 'share-2', confirmLabel: 'Share PDF', onConfirm: () => { void shareEvent(); } });
   }
   async function shareEvent() {
     if (!event || busy || pdfInProgress.current) return;
@@ -110,10 +114,8 @@ export default function EventDetailsScreen() {
         });
       } catch (cause) {
         fail(cause);
-        Alert.alert('Could not open the share sheet', 'Open the print menu to print or save this PDF.', [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Open Print', onPress: () => { void Print.printAsync({ uri }).catch(fail); } },
-        ]);
+        confirm({ title: 'Could not open the share sheet', message: 'Open the print menu to print or save this PDF.',
+          icon: 'printer', confirmLabel: 'Open Print', onConfirm: () => { void Print.printAsync({ uri }).catch(fail); } });
       }
     } catch (cause) {
       fail(cause);
@@ -155,7 +157,7 @@ export default function EventDetailsScreen() {
 
   if (!event) return <Screen><Header title="Event Details" onBack={() => navigation.goBack()} /><EmptyState icon="calendar" title="Event unavailable" description="This event may have been deleted. Return to your events to choose another shoot." /></Screen>;
   return <Screen>
-    <Header title="Event Details" onBack={() => navigation.goBack()} right={<View style={{ flexDirection: 'row' }}><IconButton name="share-2" label="Share event PDF" onPress={shareEvent} /><IconButton name="more-vertical" label="Event actions" onPress={showOptions} /></View>} />
+    <Header title="Event Details" onBack={() => navigation.goBack()} right={<View style={{ flexDirection: 'row' }}><IconButton name="share-2" label="Share event PDF" onPress={confirmShare} /><IconButton name="more-vertical" label="Event actions" onPress={showOptions} /></View>} />
     <Card style={{ gap: 14, overflow: 'hidden' }}>
       <View style={ui.between}><View style={{ flex: 1, gap: 10 }}><Text style={styles.eyebrow}>SHOOT DETAILS</Text><View style={{ alignSelf: 'flex-start' }}><Badge label={event.type} tone="teal" /></View></View><CameraArt size={110} /></View>
       <View style={styles.divider} />
@@ -188,7 +190,7 @@ export default function EventDetailsScreen() {
     {!!event.notes && <Card style={{ gap: 8 }}><Text style={ui.heading}>Studio Notes</Text><Text style={ui.body}>{event.notes}</Text></Card>}
     <View style={styles.total}><Text style={ui.label}>Total Amount</Text><Text style={[ui.heading, { color: colors.primaryDark }]}>{money(event.totalAmount)}</Text></View>
     {!!error && <ErrorMessage message={error} />}
-    <Button title="Share Event PDF" icon="share-2" onPress={shareEvent} disabled={busy} loading={sharingPdf} />
+    <Button title="Share Event PDF" icon="share-2" onPress={confirmShare} disabled={busy} loading={sharingPdf} />
     <Card style={ui.gap}>
       <SectionTitle title="Shoot Workflow" />
       {pendingStatus && <View style={styles.statusProgress} accessible accessibilityLiveRegion="polite" accessibilityState={{ busy: true }}>

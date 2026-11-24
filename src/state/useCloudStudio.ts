@@ -370,7 +370,10 @@ export function useCloudStudio(): StudioContext {
       return write(id ? '/photo-galleries/' + encodeURIComponent(id) : '/photo-galleries', id ? 'PATCH' : 'POST', { clientId, driveLink });
     },
     removePhotoGallery(id) { return write('/photo-galleries/' + encodeURIComponent(id), 'DELETE'); },
-    savePhotoGalleries(clientId, driveLinks) { return write('/photo-galleries/batch', 'POST', { clientId, driveLinks }); },
+    savePhotoGalleries(clientId, driveLinks, editingId) {
+      return write(editingId ? '/photo-galleries/' + encodeURIComponent(editingId) + '/batch' : '/photo-galleries/batch',
+        editingId ? 'PATCH' : 'POST', { clientId, driveLinks });
+    },
     addEventType(name) { return write('/event-types', 'POST', { name }); },
     async setHomePhoto(uri) {
       if (!uri) {

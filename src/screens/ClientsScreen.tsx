@@ -1,7 +1,8 @@
 import { PagedList } from '../components/PagedList';
 import { useToast } from '../components/Toast';
+import { useConfirmation } from '../components/ConfirmationDialog';
 import React, { useCallback, useMemo, useState } from 'react';
-import { Alert, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Feather from '@expo/vector-icons/Feather';
 import { useFocusEffect } from '@react-navigation/native';
@@ -27,6 +28,7 @@ function nextEvent(events: StudioEvent[], now: Date): StudioEvent | undefined {
 }
 
 export default function ClientsScreen() {
+  const confirm = useConfirmation();
   const showToast = useToast();
   const { colors, ui } = useStudioTheme();
   const styles = makeStyles(colors);
@@ -122,15 +124,13 @@ export default function ClientsScreen() {
   }
 
   function confirmDelete(client: Client) {
-    Alert.alert('Make client inactive?', `${client.name} will be hidden from the list. Search for them to view their details.`, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Make inactive', style: 'destructive', onPress: () => {
+    confirm({ title: 'Make client inactive?', message: `${client.name} will be hidden from the list. Search for them to view their details.`,
+      icon: 'user-x', confirmLabel: 'Make inactive', destructive: true, onConfirm: () => {
         setError('');
         setDeletingId(client.id);
         void deleteClient(client.id).then(() => showToast('Client marked inactive'))
           .catch(exception => setError(failureMessage(exception))).finally(() => setDeletingId(null));
-      } },
-    ]);
+      } });
   }
 
   async function openContact(url: string) {
@@ -212,7 +212,8 @@ export default function ClientsScreen() {
                   <ClientAction icon="message-circle" label={`Message ${client.name}`} color={colors.success} onPress={() => message(client)} />
                 </> : null}
                 <ClientAction icon="edit-2" label={`Edit ${client.name}`} color={colors.primaryDark} onPress={() => openForm(client)} />
-                {!client.inactive && <ClientAction icon="trash-2" label={`Make ${client.name} inactive`} color={colors.error} disabled={Boolean(deletingId)} onPress={() => confirmDelete(client)} />}
+                {!client.inactive && <ClientAction icon="trash-2" label={`Make ${client.name} inactive`} color={colors.error}
+                  disabled={Boolean(deletingId)} loading={deletingId === client.id} onPress={() => confirmDelete(client)} />}
                 </View>
               </View>
             </Card>;
@@ -251,14 +252,14 @@ export default function ClientsScreen() {
   );
 }
 
-function ClientAction({ icon, label, color, disabled, onPress }: {
-  icon: React.ComponentProps<typeof Feather>['name']; label: string; color: string; disabled?: boolean; onPress: () => void;
+function ClientAction({ icon, label, color, disabled, loading = false, onPress }: {
+  icon: React.ComponentProps<typeof Feather>['name']; label: string; color: string; disabled?: boolean; loading?: boolean; onPress: () => void;
 }) {
   const { colors } = useStudioTheme();
   const styles = makeStyles(colors);
-  return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled }}
-    disabled={disabled} onPress={onPress} style={({ pressed }) => [styles.actionTarget, (pressed || disabled) && { opacity: 0.55 }]}>
-    <Feather name={icon} size={17} color={color} />
+  return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled: disabled || loading, busy: loading }}
+    disabled={disabled || loading} onPress={onPress} style={({ pressed }) => [styles.actionTarget, (pressed || (disabled && !loading)) && { opacity: 0.55 }]}>
+    {loading ? <ActivityIndicator size="small" color={color} /> : <Feather name={icon} size={17} color={color} />}
   </Pressable>;
 }
 

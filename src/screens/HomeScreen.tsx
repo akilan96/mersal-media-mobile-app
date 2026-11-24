@@ -6,7 +6,8 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useStudioNavigation } from '../navigation/useStudioNavigation';
 import { CameraArt, Card, EmptyState, Header, Screen, SectionTitle } from '../components/ui';
 import { MetricCard } from '../components/MetricCard';
-import { formatTime, greeting, upcomingEvents } from '../domain/helpers';
+import { HomeGreeting } from '../components/HomeGreeting';
+import { formatTime, upcomingEvents } from '../domain/helpers';
 import { useStudio } from '../state/StudioProvider';
 import { useStudioTheme, type Palette } from '../theme';
 import type { StudioEvent } from '../domain/types';
@@ -104,7 +105,11 @@ export default function HomeScreen() {
       </Screen>
     </Modal>
     <View style={[styles.hero, stackHero && styles.stackedHero]}>
-      <View style={styles.greeting}><Text style={ui.body}>Welcome, {greeting()}</Text><Text accessibilityRole="header" style={[ui.title, styles.name]}>{data.profile?.name || 'Photographer'}!</Text><Text style={[ui.body, { fontSize: 13 }]}>Manage your events, photos and clients all in one place.</Text></View>
+      <View style={styles.greeting}>
+        <HomeGreeting />
+        <Text accessibilityRole="header" style={[ui.title, styles.name]}>{data.profile?.name || 'Photographer'}!</Text>
+        <Text style={[ui.body, { fontSize: 13 }]}>Manage your events, photos and clients all in one place.</Text>
+      </View>
       <View style={styles.heroArt}>
         <CameraArt uri={data.homePhoto} size={stackHero ? 154 : Math.min(154, Math.round(width * 0.34))} />
       </View>

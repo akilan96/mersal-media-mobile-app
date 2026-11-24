@@ -69,3 +69,19 @@ test('missing Atlas configuration fails without exposing connection details', as
       error instanceof StoreError && error.status === 503 && error.message === 'Studio database is unavailable.');
   }
 });
+
+test('Atlas Home photo upserts validate nonempty image bytes', async t => {
+  const connection = mongoose.createConnection();
+  try {
+    const { HomePhoto } = createMongoModels(connection);
+    const write = t.mock.method(HomePhoto.collection, 'updateOne', async () => ({ acknowledged: true }));
+    const save = (bytes: Buffer) => HomePhoto.updateOne({ _id: 'shared' }, { $set: { contentType: 'image/png', bytes } },
+      { upsert: true, runValidators: true }).exec();
+    await save(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+    await assert.rejects(save(Buffer.alloc(0)), { name: 'ValidationError' });
+    await assert.rejects(save(Buffer.alloc(4 * 1024 * 1024 + 1)), { name: 'ValidationError' });
+    assert.equal(write.mock.callCount(), 1);
+  } finally {
+    await connection.destroy();
+  }
+});

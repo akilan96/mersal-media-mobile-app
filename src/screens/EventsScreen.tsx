@@ -1,6 +1,6 @@
 import { PagedList } from '../components/PagedList';
 import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
 import { useRoute, type RouteProp } from '@react-navigation/native';
 import { useStudioNavigation } from '../navigation/useStudioNavigation';
@@ -8,6 +8,7 @@ import { Badge, Button, Card, Chip, EmptyState, ErrorMessage, Field, Header, Ico
 import { useStudioTheme, type Palette } from '../theme';
 import { useStudio } from '../state/StudioProvider';
 import { useToast } from '../components/Toast';
+import { useConfirmation } from '../components/ConfirmationDialog';
 import { formatTime, money, upcomingEvents } from '../domain/helpers';
 import type { EventListFilter, MainTabParamList, StudioEvent } from '../domain/types';
 
@@ -17,6 +18,7 @@ const filterTitles: Record<EventListFilter, string> = {
 };
 
 export default function EventsScreen() {
+  const confirm = useConfirmation();
   const showToast = useToast();
   const { colors, ui } = useStudioTheme();
   const styles = makeStyles(colors);
@@ -54,17 +56,15 @@ export default function EventsScreen() {
     });
   }, [data.events, filtered, query, sort]);
   function confirmDelete(event: StudioEvent) {
-    Alert.alert('Make event inactive?', `“${event.title}” will be hidden from the list. Search for it to view its details.`, [
-      { text: 'Keep event', style: 'cancel' },
-      { text: 'Make inactive', style: 'destructive', onPress: async () => {
+    confirm({ title: 'Make event inactive?', message: `“${event.title}” will be hidden from the list. Search for it to view its details.`,
+      icon: 'eye-off', cancelLabel: 'Keep event', confirmLabel: 'Make inactive', destructive: true, onConfirm: async () => {
         setDeleting(event.id); setError('');
         try {
           await deleteEvent(event.id);
           showToast('Event marked inactive');
         } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not make this event inactive. Try again.'); }
         finally { setDeleting(undefined); }
-      } },
-    ]);
+      } });
   }
   return (
     <PagedList items={events} scope={JSON.stringify([filter, openedAt, query, sort])} createAction={{ label: 'Create event', onPress: () => navigation.navigate('CreateEvent') }} header={<View style={ui.gap}>

@@ -194,6 +194,20 @@ test('studio API persists private data and validates event and client workflows'
     const createdGalleries = await request('POST', '/photo-galleries/batch', 201, batch, token);
     assert.equal(createdGalleries.length, 10);
     assert.deepEqual(createdGalleries.map((gallery: { driveLink: string }) => gallery.driveLink), driveLinks);
+    const originalGallery = createdGalleries[0];
+    const editBatchPath = '/photo-galleries/' + originalGallery.id + '/batch';
+    await request('PATCH', editBatchPath, 422, { ...batch, driveLinks: [galleryInput.driveLink, 'https://example.com/folder'] }, token);
+    await request('POST', '/photo-galleries', 422, galleryInput, token);
+    await request('PATCH', editBatchPath, 422, { ...batch, driveLinks: [originalGallery.driveLink, galleryInput.driveLink] }, token);
+    assert.equal((await request('GET', '/studio', 200, undefined, token)).data.photoGalleries.length, 10);
+    await request('DELETE', '/photo-galleries/' + createdGalleries[1].id, 204, undefined, token);
+    await request('POST', '/photo-galleries', 422, { ...galleryInput, driveLink: originalGallery.driveLink }, token);
+    const editedGalleries = await request('PATCH', editBatchPath, 200,
+      { ...batch, driveLinks: [originalGallery.driveLink, galleryInput.driveLink] }, token);
+    assert.equal(editedGalleries[0].id, originalGallery.id);
+    assert.equal(editedGalleries[0].createdAt, originalGallery.createdAt);
+    assert.equal(editedGalleries[1].driveLink, galleryInput.driveLink);
+    assert.equal((await request('GET', '/studio', 200, undefined, token)).data.photoGalleries.length, 10);
     assert.equal((await request('GET', '/settings', 200, undefined, token)).theme, 'forest');
     assert.equal((await request('GET', '/events/' + event.id, 200, undefined, token)).title, 'Updated title');
     await request('PATCH', '/events/' + event.id + '/inactive', 204, undefined, token);
@@ -306,7 +320,7 @@ test('owner creates admin and client accounts while clients cannot access studio
       { id: otherGalleryId, clientId: otherClientId, driveLink: 'https://drive.google.com/drive/folders/unrelated', createdAt: date },
     ],
   };
-  const accounts = new Map<string, { id: string; name: string; pin: string; role: 'admin' | 'client'; clientId?: string }>();
+  const accounts = new Map<string, { id: string; name: string; pin: string; role: 'admin' | 'client'; clientId?: string; createdAt?: string }>();
   const sessions = new Map<string, { id: string; expires: number }>();
   accounts.set('aki', { id: 'aki-id', name: 'Aki', pin: '1234', role: 'client' });
   const app = createExpressApi({
@@ -339,11 +353,11 @@ test('owner creates admin and client accounts while clients cannot access studio
       const { username, name, role, pin } = input;
       const clientId = role === 'client' ? existing.clientId : undefined;
       accounts.set(username, { ...existing, name, role, pin: pin ?? existing.pin, clientId });
-      return { username, name, role, clientId };
+      return { username, name, role, clientId, createdAt: existing.createdAt };
     },
     deleteManagedAccount(username) { return accounts.delete(username); },
     listManagedAccounts() {
-      return Array.from(accounts, ([username, account]) => ({ username, name: account.name, role: account.role }));
+      return Array.from(accounts, ([username, account]) => ({ username, name: account.name, role: account.role, createdAt: account.createdAt }));
     },
     linkClientAccount(username, id) {
       const account = accounts.get(username);
@@ -401,7 +415,9 @@ test('owner creates admin and client accounts while clients cannot access studio
       const account = { username: role + '.new', name: role, pin: '0314', role };
       const created = await request('/accounts', 'POST', owner, account);
       assert.equal(created.status, 201);
-      assert.deepEqual(await created.json(), { username: account.username, name: role, role });
+      const { createdAt, ...createdAccount } = await created.json();
+      assert.ok(Number.isFinite(Date.parse(createdAt)));
+      assert.deepEqual(createdAccount, { username: account.username, name: role, role });
       assert.equal((await request('/accounts', 'POST', owner, account)).status, 409);
       const token = await login(account.username, account.pin);
       assert.equal((await (await request('/auth/me', 'GET', token)).json()).role, role);
@@ -450,7 +466,8 @@ test('owner creates admin and client accounts while clients cannot access studio
     assert.equal((await request('/accounts/aki', 'DELETE', owner)).status, 403);
     const edited = await request('/accounts/client.new', 'PATCH', owner, { username: 'client.edited', name: 'Edited Client', role: 'client' });
     assert.equal(edited.status, 200);
-    assert.deepEqual(await edited.json(), { username: 'client.edited', name: 'Edited Client', role: 'client', clientId });
+    assert.deepEqual(await edited.json(), { username: 'client.edited', name: 'Edited Client', role: 'client', clientId,
+      createdAt: entries.find((entry: { username: string }) => entry.username === 'client.new').createdAt });
     const editedClient = await login('client.edited', '0314');
     assert.equal((await request('/accounts/client.edited', 'DELETE', owner)).status, 204);
     assert.equal((await request('/auth/me', 'GET', editedClient)).status, 401);

@@ -2,7 +2,7 @@ import { createHash, randomBytes, randomUUID, scrypt, timingSafeEqual } from 'no
 import express, { type ErrorRequestHandler, type Response } from 'express';
 import { rateLimit } from 'express-rate-limit';
 import { z } from 'zod';
-import { defaultEventTypes, maxGalleryLinksPerCreate, themeNames, type AccountRole, type StudioData } from '../src/domain/types';
+import { defaultEventTypes, maxGalleryLinksPerClient, themeNames, type AccountRole, type StudioData } from '../src/domain/types';
 import { addPhotoGallery, assertStudioData, isClientPhone, isGoogleDriveLink, phoneDigits, putEvent, removeClient } from '../src/domain/validation';
 import { balanceAmount, eventSummary, upcomingEvents } from '../src/domain/helpers';
 import { StoreError, type StudioStore } from './store';
@@ -271,10 +271,11 @@ export function createExpressApi(store: StudioStore, app = express(), sharedSign
     if (!store.createManagedAccount) throw new ApiError(503, 'Account management is unavailable.');
     const { username, name, pin, role } = managedAccount.parse(req.body);
     if (!username) throw new ApiError(422, 'Enter a username.');
-    if (username === ownerUsername || !await store.createManagedAccount(randomUUID(), { username, name, pin, role })) {
+    const createdAt = stamp();
+    if (username === ownerUsername || !await store.createManagedAccount(randomUUID(), { username, name, pin, role, createdAt })) {
       throw new ApiError(409, 'Username is already in use.');
     }
-    res.status(201).json({ username, name, role });
+    res.status(201).json({ username, name, role, createdAt });
   });
   api.patch('/accounts/:username', async (req, res) => {
     if (!store.updateManagedAccount) throw new ApiError(503, 'Account management is unavailable.');
@@ -372,18 +373,35 @@ export function createExpressApi(store: StudioStore, app = express(), sharedSign
     res.sendStatus(204);
   });
   const galleryLink = z.string().trim().max(2048).refine(isGoogleDriveLink, 'Enter a valid Google Drive link.');
+  const saveGallery: typeof addPhotoGallery = (data, gallery) => {
+    try { return addPhotoGallery(data, gallery); }
+    catch (error) { throw new ApiError(422, error instanceof Error ? error.message : 'Could not save the gallery.'); }
+  };
   const galleryInput = z.object({ clientId: z.uuid(), driveLink: galleryLink });
+  const galleryBatch = z.object({
+    clientId: z.uuid(),
+    driveLinks: z.array(galleryLink).min(1).max(maxGalleryLinksPerClient)
+      .refine(links => new Set(links).size === links.length, 'Each Drive link must be different.'),
+  });
   api.post('/photo-galleries/batch', async (req, res) => {
-    const { clientId, driveLinks } = z.object({
-      clientId: z.uuid(),
-      driveLinks: z.array(galleryLink).min(1).max(maxGalleryLinksPerCreate)
-        .refine(links => new Set(links).size === links.length, 'Each Drive link must be different.'),
-    }).parse(req.body);
+    const { clientId, driveLinks } = galleryBatch.parse(req.body);
     const createdAt = stamp();
     const galleries = driveLinks.map(driveLink => ({ id: randomUUID(), clientId, driveLink, createdAt }));
     res.status(201).json(await update(res, data => {
       if (!data.clients.some(client => client.id === clientId)) throw new ApiError(422, 'Choose an existing client.');
-      return { data: galleries.reduce(addPhotoGallery, data), result: galleries };
+      return { data: galleries.reduce(saveGallery, data), result: galleries };
+    }));
+  });
+  api.patch('/photo-galleries/:id/batch', async (req, res) => {
+    const { clientId, driveLinks } = galleryBatch.parse(req.body);
+    const createdAt = stamp();
+    res.json(await update(res, data => {
+      const prior = data.photoGalleries?.find(gallery => gallery.id === req.params.id);
+      if (!prior) throw new ApiError(404, 'Gallery not found.');
+      if (!data.clients.some(client => client.id === clientId)) throw new ApiError(422, 'Choose an existing client.');
+      const galleries = driveLinks.map((driveLink, index) => index === 0 ? { ...prior, clientId, driveLink }
+        : { id: randomUUID(), clientId, driveLink, createdAt });
+      return { data: galleries.reduce(saveGallery, data), result: galleries };
     }));
   });
   api.post('/photo-galleries', async (req, res) => {
@@ -391,7 +409,7 @@ export function createExpressApi(store: StudioStore, app = express(), sharedSign
     const gallery = { ...input, id: randomUUID(), createdAt: stamp() };
     res.status(201).json(await update(res, data => {
       if (!data.clients.some(client => client.id === input.clientId)) throw new ApiError(422, 'Choose an existing client.');
-      return { data: addPhotoGallery(data, gallery), result: gallery };
+      return { data: saveGallery(data, gallery), result: gallery };
     }));
   });
   api.patch('/photo-galleries/:id', async (req, res) => {
@@ -401,7 +419,7 @@ export function createExpressApi(store: StudioStore, app = express(), sharedSign
       if (!prior) throw new ApiError(404, 'Gallery not found.');
       if (!data.clients.some(client => client.id === input.clientId)) throw new ApiError(422, 'Choose an existing client.');
       const gallery = { ...prior, ...input };
-      return { data: addPhotoGallery(data, gallery), result: gallery };
+      return { data: saveGallery(data, gallery), result: gallery };
     }));
   });
   api.delete('/photo-galleries/:id', async (req, res) => {
