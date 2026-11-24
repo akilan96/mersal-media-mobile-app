@@ -24,6 +24,7 @@ async function sync(events: StudioEvent[]) {
     await Notifications.setNotificationChannelAsync(channelId, {
       name: 'Upcoming shoots',
       importance: Notifications.AndroidImportance.HIGH,
+      sound: 'default',
     });
   }
 

@@ -42,7 +42,8 @@
         }
       ],
       "expo-audio",
-      "expo-image"
+      "expo-image",
+      "expo-build-properties"
     ],
     "web": {
       "name": "Mersal Media"

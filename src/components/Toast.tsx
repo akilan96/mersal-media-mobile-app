@@ -2,7 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useRef, useSt
 import { AccessibilityInfo, Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Feather from '@expo/vector-icons/Feather';
-import { useAudioPlayer } from 'expo-audio';
+import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 type ToastOptions = { sound?: boolean };
 const ToastContext = createContext<(message: string, options?: ToastOptions) => void>(() => {});
 
@@ -11,7 +11,9 @@ export const useToast = () => useContext(ToastContext);
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const { top, left, right } = useSafeAreaInsets();
   const player = useAudioPlayer(require('../../assets/audio/mersal_notification.mp3'));
-  const [toast, setToast] = useState<{ message: string } | null>(null);
+  const { isLoaded } = useAudioPlayerStatus(player);
+  const [toast, setToast] = useState<{ message: string; sound: boolean } | null>(null);
+  const playedToast = useRef<typeof toast>(null);
   const [reduceMotion, setReduceMotion] = useState(true);
   const progress = useRef(new Animated.Value(0)).current;
   const countdown = useRef(new Animated.Value(1)).current;
@@ -26,12 +28,17 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const showToast = useCallback((message: string, options?: ToastOptions) => {
-    setToast({ message });
-    if (options?.sound !== false) {
-      // Playback failure should never hide a successful save confirmation.
-      void player.seekTo(0).then(() => player.play()).catch(() => {});
-    }
-  }, [player]);
+    setToast({ message, sound: options?.sound !== false });
+  }, []);
+
+  useEffect(() => {
+    if (!toast?.sound || !isLoaded || playedToast.current === toast) return;
+    playedToast.current = toast;
+    void setAudioModeAsync({ playsInSilentMode: true })
+      .then(() => player.seekTo(0))
+      .then(() => player.play())
+      .catch(error => console.warn('Could not play confirmation sound:', error));
+  }, [isLoaded, player, toast]);
 
   useEffect(() => {
     if (!toast) return;

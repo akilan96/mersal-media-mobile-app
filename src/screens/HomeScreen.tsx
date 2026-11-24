@@ -98,10 +98,10 @@ export default function HomeScreen() {
             </View>
           </Card>
         ))}
-        {unreadReminders.map(event => (
+        {upcoming.map(event => (
           <UpcomingCard key={event.id} event={event} onPress={() => viewReminder(event)} />
         ))}
-        {noticeCount === 0 && <EmptyState icon="bell" title="No reminders yet" description="Scheduled shoots will appear here as reminders." />}
+        {!showSamples && upcoming.length === 0 && <EmptyState icon="bell" title="No reminders yet" description="Booked shoots with a future date and time will appear here." />}
       </Screen>
     </Modal>
     <View style={[styles.hero, stackHero && styles.stackedHero]}>
