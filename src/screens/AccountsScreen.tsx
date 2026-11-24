@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Keyboard, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Keyboard, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
 import { Badge, Button, Card, EmptyState, ErrorMessage, Field, Header, Screen } from '../components/ui';
 import { PagedList } from '../components/PagedList';
@@ -20,7 +20,7 @@ export default function AccountsScreen() {
   const navigation = useStudioNavigation();
   const { colors, ui } = useStudioTheme();
   const styles = makeStyles(colors);
-  const { data, listAccounts, createAccount, linkClientAccount } = useStudio();
+  const { data, listAccounts, createAccount, updateAccount, deleteAccount, linkClientAccount } = useStudio();
   const showToast = useToast();
   const [accounts, setAccounts] = useState<ManagedAccount[]>([]);
   const [query, setQuery] = useState('');
@@ -28,6 +28,9 @@ export default function AccountsScreen() {
   const [loading, setLoading] = useState(true);
   const [loadVersion, setLoadVersion] = useState(0);
   const [formVisible, setFormVisible] = useState(false);
+  const [editing, setEditing] = useState<ManagedAccount>();
+  const [deleting, setDeleting] = useState<string>();
+  const [actionError, setActionError] = useState('');
   const [name, setName] = useState('');
   const [username, setUsername] = useState('');
   const [pin, setPin] = useState('');
@@ -60,15 +63,21 @@ export default function AccountsScreen() {
   }, [listAccounts, loadVersion]);
 
   const term = query.trim().toLowerCase();
+  const clientTerm = linkQuery.trim().toLowerCase();
+  const activeClients = data.clients.filter(client => !client.inactive).sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+  const matchingClients = clientTerm ? activeClients.filter(client =>
+    `${client.name} ${client.phone} ${client.email}`.toLowerCase().includes(clientTerm)) : activeClients.slice(0, 5);
+  const selectedClient = data.clients.find(client => client.id === linkedClientId);
   const displayedAccounts = accounts
     .filter(account => [account.name, account.username, '@' + account.username, account.role]
       .some(value => value.toLowerCase().includes(term)))
     .sort((a, b) => a.name.localeCompare(b.name) || a.username.localeCompare(b.username))
     .map(account => ({ ...account, id: account.username }));
 
-  function openForm() {
+  function openForm(account?: ManagedAccount) {
     Keyboard.dismiss();
-    setName(''); setUsername(''); setPin(''); setRole('client'); setSaveError('');
+    setEditing(account);
+    setName(account?.name ?? ''); setUsername(account?.username ?? ''); setPin(''); setRole(account?.role ?? 'client'); setSaveError('');
     setFormVisible(true);
   }
 
@@ -79,23 +88,43 @@ export default function AccountsScreen() {
   }
 
   async function save() {
-    if (saving || loading || !createAccount) return;
+    if (saving || loading || !createAccount || (editing && !updateAccount)) return;
     setSaveError('');
-    if (!name.trim() || !/^[a-zA-Z0-9_.-]{3,40}$/.test(username.trim()) || !/^\d{4}$/.test(pin)) {
-      setSaveError('Enter a name, a username with 3–40 valid characters, and a four-digit PIN.');
+    if (!name.trim() || !/^[a-zA-Z0-9_.-]{3,40}$/.test(username.trim()) || ((!editing || pin) && !/^\d{4}$/.test(pin))) {
+      setSaveError(editing ? 'Enter a valid name and username. If changing the PIN, enter four digits.'
+        : 'Enter a name, a username with 3–40 valid characters, and a four-digit PIN.');
       return;
     }
     Keyboard.dismiss();
     setSaving(true);
     try {
-      const created = await createAccount({ name: name.trim(), username: username.trim(), pin, role });
-      setAccounts(previous => [...previous.filter(account => account.username !== created.username), created]);
+      const details = { name: name.trim(), username: username.trim(), role };
+      const saved = editing && updateAccount ? await updateAccount(editing.username, { ...details, pin: pin || undefined })
+        : await createAccount({ ...details, pin });
+      setAccounts(previous => [...previous.filter(account => account.username !== (editing?.username ?? saved.username)), saved]);
       setPin('');
       setQuery('');
       setFormVisible(false);
-      showToast(created.role === 'admin' ? 'Admin account created' : 'Client account created', { sound: true });
+      showToast(editing ? 'Account updated' : saved.role === 'admin' ? 'Admin account created' : 'Client account created');
     } catch (error) { setSaveError(errorText(error)); }
     finally { setSaving(false); }
+  }
+
+  function confirmDelete(account: ManagedAccount) {
+    if (!deleteAccount || deleting) return;
+    Alert.alert('Delete account?', `@${account.username} will lose sign-in access. Their linked client record stays saved.`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: async () => {
+        setDeleting(account.username);
+        setActionError('');
+        try {
+          await deleteAccount(account.username);
+          setAccounts(current => current.filter(item => item.username !== account.username));
+          showToast('Account deleted');
+        } catch (error) { setActionError(errorText(error)); }
+        finally { setDeleting(undefined); }
+      } },
+    ]);
   }
 
   function openLink(account: ManagedAccount) {
@@ -122,11 +151,12 @@ export default function AccountsScreen() {
     <PagedList
       items={displayedAccounts}
       scope={term}
-      createAction={createAccount && !loading ? { label: 'Create account', onPress: openForm } : undefined}
+      createAction={createAccount && !loading ? { label: 'Create account', onPress: () => openForm() } : undefined}
       header={<View style={ui.gap}>
         <Header title="Accounts" onBack={() => navigation.goBack()} />
         <Field icon="search" placeholder="Search name, username, or role" accessibilityLabel="Search accounts"
           value={query} onChangeText={setQuery} returnKeyType="search" autoCapitalize="none" />
+        {!!actionError && <ErrorMessage message={actionError} />}
       </View>}
       empty={loading ? <ActivityIndicator color={colors.primary} accessibilityLabel="Loading studio accounts" />
         : loadError ? <View style={ui.gap}>
@@ -146,11 +176,16 @@ export default function AccountsScreen() {
         {item.role === 'client' && linkClientAccount && <Button
           title={item.clientId ? 'Change linked client' : 'Link client'} icon="link" variant="secondary"
           onPress={() => openLink(item)} />}
+        <View style={styles.accountActions}>
+          {updateAccount && <Button title="Edit" icon="edit-2" variant="ghost" disabled={!!deleting} onPress={() => openForm(item)} />}
+          {deleteAccount && <Button title="Delete" icon="trash-2" variant="danger" disabled={!!deleting}
+            loading={deleting === item.username} onPress={() => confirmDelete(item)} />}
+        </View>
       </Card>}
     />
     <Modal visible={formVisible} animationType="slide" presentationStyle="pageSheet" onRequestClose={closeForm}>
       <Screen>
-        <Header title="Create Account" onBack={closeForm} />
+        <Header title={editing ? 'Edit Account' : 'Create Account'} onBack={closeForm} />
         <Card style={ui.gap}>
           <Text style={ui.heading}>Account type</Text>
           {roles.map(option => <Pressable key={option.value} accessibilityRole="radio"
@@ -166,21 +201,22 @@ export default function AccountsScreen() {
           <Field label="Name" icon="user" value={name} onChangeText={setName} maxLength={100} editable={!saving} />
           <Field label="Username" icon="at-sign" value={username} onChangeText={setUsername}
             autoCapitalize="none" autoCorrect={false} maxLength={40} editable={!saving} />
-          <PinField label="Four-digit PIN" value={pin} onChange={setPin} revealed={false} disabled={saving} />
+          <PinField label={editing ? 'New PIN (optional)' : 'Four-digit PIN'} value={pin} onChange={setPin} revealed={false} disabled={saving} />
         </Card>
         {!!saveError && <ErrorMessage message={saveError} />}
-        <Button title="Create Account" icon="user-plus" loading={saving} onPress={() => void save()} />
+        <Button title={editing ? 'Save Changes' : 'Create Account'} icon={editing ? 'check' : 'user-plus'} loading={saving} onPress={() => void save()} />
       </Screen>
     </Modal>
     <Modal visible={linkAccount !== null} animationType="slide" presentationStyle="pageSheet"
       onRequestClose={() => { if (!linkSaving) setLinkAccount(null); }}>
       <Screen>
         <Header title="Link Client" onBack={() => { if (!linkSaving) setLinkAccount(null); }} />
-        <Text style={ui.body}>Choose which client record @{linkAccount?.username} can see payment totals for.</Text>
+        <Text style={ui.body}>Choose which client record @{linkAccount?.username} can access.</Text>
+        {selectedClient && <Text style={ui.label}>Selected client: {selectedClient.name}</Text>}
         <Field icon="search" placeholder="Find a client" accessibilityLabel="Find a client to link"
           value={linkQuery} onChangeText={setLinkQuery} editable={!linkSaving} />
-        {data.clients.filter(client => `${client.name} ${client.phone} ${client.email}`.toLowerCase().includes(linkQuery.trim().toLowerCase()))
-          .map(client => <Pressable key={client.id} accessibilityRole="radio"
+        {!clientTerm && matchingClients.length > 0 && <Text style={ui.small}>Newest clients</Text>}
+        {matchingClients.map(client => <Pressable key={client.id} accessibilityRole="radio"
             accessibilityState={{ checked: client.id === linkedClientId, disabled: linkSaving }}
             disabled={linkSaving} style={[styles.roleOption, client.id === linkedClientId && styles.selected]}
             onPress={() => { setLinkedClientId(client.id); setLinkError(''); }}>
@@ -190,7 +226,7 @@ export default function AccountsScreen() {
             </View>
             <Feather name={client.id === linkedClientId ? 'check-circle' : 'circle'} size={19} color={colors.primaryDark} />
           </Pressable>)}
-        {!data.clients.length && <Text style={ui.small}>Create a client record in Clients first.</Text>}
+        {!matchingClients.length && <Text style={ui.small}>{clientTerm ? 'No clients match your search.' : 'No active clients to link.'}</Text>}
         {!!linkError && <ErrorMessage message={linkError} />}
         <Button title="Save Client Link" icon="link" loading={linkSaving} disabled={!linkedClientId} onPress={() => void saveLink()} />
       </Screen>
@@ -200,6 +236,7 @@ export default function AccountsScreen() {
 
 const makeStyles = (colors: Palette) => StyleSheet.create({
   accountCard: { gap: 10 },
+  accountActions: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 8 },
   accountIcon: { width: 42, height: 42, borderRadius: 12, backgroundColor: colors.mint, alignItems: 'center', justifyContent: 'center' },
   roleOption: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10, borderWidth: 1, borderColor: colors.border, borderRadius: 14 },
   selected: { borderColor: colors.primary, backgroundColor: colors.mint },

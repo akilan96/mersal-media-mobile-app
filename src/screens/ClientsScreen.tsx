@@ -31,7 +31,7 @@ export default function ClientsScreen() {
   const { colors, ui } = useStudioTheme();
   const styles = makeStyles(colors);
  
-  const { data, saveClient, deleteClient } = useStudio();
+  const { data, saveClient, deleteClient, reactivateClient } = useStudio();
   const navigation = useStudioNavigation();
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<Sort>('Newest');
@@ -41,7 +41,9 @@ export default function ClientsScreen() {
   const [errors, setErrors] = useState<Partial<Record<keyof ClientInput, string>>>({});
   const [error, setError] = useState('');
   const [formError, setFormError] = useState('');
-  const [busy, setBusy] = useState(false);
+  const [busyAction, setBusyAction] = useState<'save' | 'reactivate' | null>(null);
+  const busy = busyAction !== null;
+  const editingClient = data.clients.find(client => client.id === editing?.id);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [now, setNow] = useState(() => new Date());
   useFocusEffect(useCallback(() => {
@@ -90,6 +92,7 @@ export default function ClientsScreen() {
   }
 
   async function submit() {
+    if (busy) return;
     const clean = { name: form.name.trim(), phone: form.phone.trim(), email: form.email.trim(), notes: form.notes.trim() };
     const nextErrors: Partial<Record<keyof ClientInput, string>> = {};
     if (!clean.name) nextErrors.name = 'Enter a client name.';
@@ -97,14 +100,25 @@ export default function ClientsScreen() {
     if (clean.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean.email)) nextErrors.email = 'Enter a valid email address.';
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length) return;
-    setBusy(true);
+    setBusyAction('save');
     setFormError('');
     try {
       await saveClient(clean, editing?.id);
       showToast(editing ? 'Client updated' : 'Client created');
       setVisible(false);
     } catch (exception) { setFormError(failureMessage(exception)); }
-    finally { setBusy(false); }
+    finally { setBusyAction(null); }
+  }
+
+  async function makeActive() {
+    if (!editingClient?.inactive || busy) return;
+    setBusyAction('reactivate');
+    setFormError('');
+    try {
+      await reactivateClient(editingClient.id);
+      showToast('Client is active again');
+    } catch (exception) { setFormError(failureMessage(exception)); }
+    finally { setBusyAction(null); }
   }
 
   function confirmDelete(client: Client) {
@@ -209,6 +223,14 @@ export default function ClientsScreen() {
           <KeyboardAvoidingView style={ui.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
             <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.modalContent}>
               <Header title={editing ? 'Edit client' : 'Add client'} subtitle="Keep every connection close." onBack={() => { if (!busy) setVisible(false); }} />
+              {editingClient && <Card style={ui.gap}>
+                <View style={ui.between}>
+                  <Text style={ui.label}>Client status</Text>
+                  <Badge label={editingClient.inactive ? 'Inactive' : 'Active'} tone={editingClient.inactive ? 'neutral' : 'success'} />
+                </View>
+                {editingClient.inactive && <Button title="Make Active" icon="check-circle" variant="secondary"
+                  disabled={busy} loading={busyAction === 'reactivate'} onPress={() => void makeActive()} />}
+              </Card>}
               <Card>
                 <View style={ui.gap}>
                   <Field label="Client name *" icon="user" value={form.name} onChangeText={value => change('name', value)} error={errors.name} placeholder="Name or family name" maxLength={100} autoCapitalize="words" editable={!busy} />
@@ -218,7 +240,8 @@ export default function ClientsScreen() {
                 </View>
               </Card>
               {formError ? <ErrorMessage message={formError} /> : null}
-              <Button title={editing ? 'Save changes' : 'Save client'} icon="check" onPress={() => { void submit(); }} loading={busy} />
+              <Button title={editing ? 'Save changes' : 'Save client'} icon="check" onPress={() => { void submit(); }}
+                disabled={busy} loading={busyAction === 'save'} />
               <Text style={[ui.small, { textAlign: 'center' }]}>Saved on this device. Link this client when creating or editing an event.</Text>
             </ScrollView>
           </KeyboardAvoidingView>

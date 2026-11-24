@@ -186,6 +186,14 @@ test('studio API persists private data and validates event and client workflows'
     assert.match(updatedGallery.driveLink, /updated$/);
     await request('DELETE', '/photo-galleries/' + gallery.id, 204, undefined, token);
     assert.deepEqual((await request('GET', '/studio', 200, undefined, token)).data.photoGalleries, []);
+    const driveLinks = Array.from({ length: 10 }, (_, index) => `https://drive.google.com/drive/folders/client-gallery-${index}`);
+    const batch = { clientId: galleryInput.clientId, driveLinks };
+    await request('POST', '/photo-galleries/batch', 422, { ...batch, driveLinks: [...driveLinks, galleryInput.driveLink] }, token);
+    await request('POST', '/photo-galleries/batch', 422, { ...batch, driveLinks: [driveLinks[0], 'https://example.com/folder'] }, token);
+    assert.deepEqual((await request('GET', '/studio', 200, undefined, token)).data.photoGalleries, []);
+    const createdGalleries = await request('POST', '/photo-galleries/batch', 201, batch, token);
+    assert.equal(createdGalleries.length, 10);
+    assert.deepEqual(createdGalleries.map((gallery: { driveLink: string }) => gallery.driveLink), driveLinks);
     assert.equal((await request('GET', '/settings', 200, undefined, token)).theme, 'forest');
     assert.equal((await request('GET', '/events/' + event.id, 200, undefined, token)).title, 'Updated title');
     await request('PATCH', '/events/' + event.id + '/inactive', 204, undefined, token);
@@ -194,6 +202,10 @@ test('studio API persists private data and validates event and client workflows'
     assert.equal(inactiveEvent.inactive, true);
     assert.ok(inactiveEvent.payments.length);
     assert.equal((await request('GET', '/clients/' + event.clientId, 200, undefined, token)).client.inactive, true);
+    await request('PATCH', '/clients/' + event.clientId + '/active', 204, undefined, token);
+    const restored = await request('GET', '/clients/' + event.clientId, 200, undefined, token);
+    assert.equal(restored.client.inactive, false);
+    assert.ok(restored.events.some((item: { id: string }) => item.id === event.id));
     await request('DELETE', '/events/' + event.id, 204, undefined, token);
     const relinked = await request('PATCH', '/events/' + sameClient.id, 200,
       { contact: { name: 'New contact', phone: '+91 98765 43211' } }, token);
@@ -320,6 +332,16 @@ test('owner creates admin and client accounts while clients cannot access studio
       accounts.set(username, { id, ...account });
       return true;
     },
+    updateManagedAccount(current, input) {
+      const existing = accounts.get(current);
+      if (!existing) return null;
+      accounts.delete(current);
+      const { username, name, role, pin } = input;
+      const clientId = role === 'client' ? existing.clientId : undefined;
+      accounts.set(username, { ...existing, name, role, pin: pin ?? existing.pin, clientId });
+      return { username, name, role, clientId };
+    },
+    deleteManagedAccount(username) { return accounts.delete(username); },
     listManagedAccounts() {
       return Array.from(accounts, ([username, account]) => ({ username, name: account.name, role: account.role }));
     },
@@ -423,6 +445,15 @@ test('owner creates admin and client accounts while clients cannot access studio
     const entries = await list.json();
     assert.equal(entries.length, 2);
     assert.ok(entries.every((entry: object) => !Object.hasOwn(entry, 'pin')));
+    const admin = await login('admin.new', '0314');
+    assert.equal((await request('/accounts/client.new', 'DELETE', admin)).status, 403);
+    assert.equal((await request('/accounts/aki', 'DELETE', owner)).status, 403);
+    const edited = await request('/accounts/client.new', 'PATCH', owner, { username: 'client.edited', name: 'Edited Client', role: 'client' });
+    assert.equal(edited.status, 200);
+    assert.deepEqual(await edited.json(), { username: 'client.edited', name: 'Edited Client', role: 'client', clientId });
+    const editedClient = await login('client.edited', '0314');
+    assert.equal((await request('/accounts/client.edited', 'DELETE', owner)).status, 204);
+    assert.equal((await request('/auth/me', 'GET', editedClient)).status, 401);
   } finally {
     await new Promise<void>(resolve => server.close(() => resolve()));
     close();

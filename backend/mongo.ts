@@ -216,6 +216,35 @@ export function createMongoStore(uri: string | undefined, dbName = 'mersal_media
       const result = await auth.updateOne({ username, role: { $ne: 'admin' } }, { $set: { clientId } });
       return result.matchedCount === 1;
     },
+    async updateManagedAccount(username, input) {
+      const { connection, auth, Session } = await database();
+      try {
+        return await connection.transaction(async session => {
+          const prior = await auth.findOneAndUpdate({ username }, {
+            $set: { username: input.username, name: input.name, role: input.role, ...(input.pin ? { pin: input.pin } : {}) },
+            $unset: { ...(input.role === 'admin' ? { clientId: '' } : {}), ...(input.pin ? { attempts: '', attemptUntil: '' } : {}) },
+          }, { session, returnDocument: 'before' });
+          if (!prior) return null;
+          if (input.pin || input.role !== prior.role || input.username !== username) {
+            await Session.deleteMany({ studioId: prior._id }, { session });
+          }
+          return { username: input.username, name: input.name, role: input.role,
+            clientId: input.role === 'client' ? prior.clientId : undefined };
+        });
+      } catch (error) {
+        if (error instanceof mongoose.mongo.MongoServerError && error.code === 11000) throw new StoreError(409, 'Username is already in use.');
+        throw error;
+      }
+    },
+    async deleteManagedAccount(username) {
+      const { connection, auth, Session } = await database();
+      return connection.transaction(async session => {
+        const account = await auth.findOneAndDelete({ username }, { session });
+        if (!account) return false;
+        await Session.deleteMany({ studioId: account._id }, { session });
+        return true;
+      });
+    },
     async revokeSession(hash) {
       const { Session } = await database();
       await Session.deleteOne({ _id: hash });

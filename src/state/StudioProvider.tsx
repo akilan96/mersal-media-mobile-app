@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { defaultEventTypes, type ThemeName } from '../domain/types';
+import { defaultEventTypes, maxGalleryLinksPerCreate, type ThemeName } from '../domain/types';
 import { AppState } from 'react-native';
 import * as Crypto from 'expo-crypto';
 import type { AccountRole, ClientGalleryList, ClientInput, ClientPaymentSummary, DrivePhotoPage, EventInput, EventStatus, ManagedAccount, Profile, StudioData, StudioEvent } from '../domain/types';
@@ -15,6 +15,8 @@ export interface StudioContext {
   deviceTheme?: ThemeName;
   listAccounts?(): Promise<ManagedAccount[]>;
   createAccount?(account: ManagedAccount & { pin: string }): Promise<ManagedAccount>;
+  updateAccount?(username: string, account: Omit<ManagedAccount, 'clientId'> & { pin?: string }): Promise<ManagedAccount>;
+  deleteAccount?(username: string): Promise<void>;
   linkClientAccount?(username: string, clientId: string): Promise<void>;
   loadClientPayments?(): Promise<ClientPaymentSummary | null>;
   loadClientGalleries?(): Promise<ClientGalleryList>;
@@ -32,11 +34,13 @@ export interface StudioContext {
   recordPayment(eventId: string, amount: number, note: string): Promise<StudioEvent>;
   setEventStatus(eventId: string, status: EventStatus): Promise<void>;
   saveClient(input: ClientInput, id?: string): Promise<string>; deleteClient(id: string): Promise<void>;
+  reactivateClient(id: string): Promise<void>;
   saveProfile(profile: Profile): Promise<void>;
   setTheme(theme: ThemeName): Promise<void>;
   setHomePhoto(uri?: string): Promise<void>;
   addEventType(name: string): Promise<void>;
   savePhotoGallery(clientId: string, driveLink: string, id?: string): Promise<void>;
+  savePhotoGalleries(clientId: string, driveLinks: string[]): Promise<void>;
   removePhotoGallery(id: string): Promise<void>;
 }
 const Context = createContext<StudioContext | null>(null);
@@ -123,6 +127,15 @@ function LocalStudioProvider({ children }: { children: React.ReactNode }) {
     async removePhotoGallery(id) {
       await commit(previous => ({ ...previous, photoGalleries: (previous.photoGalleries ?? []).filter(gallery => gallery.id !== id) }));
     },
+    async savePhotoGalleries(clientId, driveLinks) {
+      const links = driveLinks.map(link => link.trim());
+      if (!links.length || links.length > maxGalleryLinksPerCreate || new Set(links).size !== links.length) {
+        throw new Error(`Enter 1–${maxGalleryLinksPerCreate} different Google Drive links.`);
+      }
+      const createdAt = new Date().toISOString();
+      const galleries = links.map(driveLink => ({ id: Crypto.randomUUID(), clientId, driveLink, createdAt }));
+      await commit(previous => galleries.reduce(addPhotoGallery, previous));
+    },
     async addEventType(name) {
       const clean = name.trim();
       if (!clean || clean.length > 60) throw new Error('Enter an event type up to 60 characters.');
@@ -189,6 +202,12 @@ function LocalStudioProvider({ children }: { children: React.ReactNode }) {
       }); return clientId;
     },
     async deleteClient(id) { await commit(previous => ({ ...previous, clients: previous.clients.map(client => client.id === id ? { ...client, inactive: true } : client) })); },
+    async reactivateClient(id) {
+      await commit(previous => {
+        if (!previous.clients.some(client => client.id === id)) throw new Error('Client not found.');
+        return { ...previous, clients: previous.clients.map(client => client.id === id ? { ...client, inactive: false } : client) };
+      });
+    },
   };
   return <Context.Provider value={value}>{children}</Context.Provider>;
 }

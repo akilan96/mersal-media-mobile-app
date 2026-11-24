@@ -32,6 +32,8 @@ export interface StudioStore {
   findAccountSession?(hash: string, now: number): Result<(Omit<ManagedAccount, 'name'> & { name?: string }) | null>;
   listManagedAccounts?(): Result<ManagedAccount[]>;
   createManagedAccount?(id: string, account: ManagedAccount & { pin: string }): Result<boolean>;
+  updateManagedAccount?(username: string, account: Omit<ManagedAccount, 'clientId'> & { pin?: string }): Result<ManagedAccount | null>;
+  deleteManagedAccount?(username: string): Result<boolean>;
   linkClientAccount?(username: string, clientId: string): Result<boolean>;
   revokeSession(hash: string): Result<void>;
   load(studioId: string): Result<{ data: StudioData; revision: number } | null>;

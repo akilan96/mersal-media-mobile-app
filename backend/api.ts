@@ -2,7 +2,7 @@ import { createHash, randomBytes, randomUUID, scrypt, timingSafeEqual } from 'no
 import express, { type ErrorRequestHandler, type Response } from 'express';
 import { rateLimit } from 'express-rate-limit';
 import { z } from 'zod';
-import { defaultEventTypes, themeNames, type AccountRole, type StudioData } from '../src/domain/types';
+import { defaultEventTypes, maxGalleryLinksPerCreate, themeNames, type AccountRole, type StudioData } from '../src/domain/types';
 import { addPhotoGallery, assertStudioData, isClientPhone, isGoogleDriveLink, phoneDigits, putEvent, removeClient } from '../src/domain/validation';
 import { balanceAmount, eventSummary, upcomingEvents } from '../src/domain/helpers';
 import { StoreError, type StudioStore } from './store';
@@ -276,6 +276,23 @@ export function createExpressApi(store: StudioStore, app = express(), sharedSign
     }
     res.status(201).json({ username, name, role });
   });
+  api.patch('/accounts/:username', async (req, res) => {
+    if (!store.updateManagedAccount) throw new ApiError(503, 'Account management is unavailable.');
+    const current = username.parse(req.params.username);
+    const input = managedAccount.partial({ pin: true }).parse(req.body);
+    if (current === ownerUsername) throw new ApiError(403, 'The studio owner account is protected.');
+    if (input.username === ownerUsername) throw new ApiError(409, 'Username is already in use.');
+    const account = await store.updateManagedAccount(current, input);
+    if (!account) throw new ApiError(404, 'Account not found.');
+    res.json(account);
+  });
+  api.delete('/accounts/:username', async (req, res) => {
+    if (!store.deleteManagedAccount) throw new ApiError(503, 'Account management is unavailable.');
+    const current = username.parse(req.params.username);
+    if (current === ownerUsername) throw new ApiError(403, 'The studio owner account is protected.');
+    if (!await store.deleteManagedAccount(current)) throw new ApiError(404, 'Account not found.');
+    res.sendStatus(204);
+  });
   api.patch('/accounts/:username/client', async (req, res) => {
     if (!store.linkClientAccount) throw new ApiError(503, 'Account management is unavailable.');
     const accountUsername = username.parse(req.params.username);
@@ -346,7 +363,28 @@ export function createExpressApi(store: StudioStore, app = express(), sharedSign
     });
     res.sendStatus(204);
   });
-  const galleryInput = z.object({ clientId: z.uuid(), driveLink: z.string().trim().max(2048).refine(isGoogleDriveLink, 'Enter a valid Google Drive link.') });
+  api.patch('/clients/:id/active', async (req, res) => {
+    await update(res, data => {
+      if (!data.clients.some(client => client.id === req.params.id)) throw new ApiError(404, 'Client not found.');
+      return { data: { ...data, clients: data.clients.map(client => client.id === req.params.id ? { ...client, inactive: false } : client) }, result: null };
+    });
+    res.sendStatus(204);
+  });
+  const galleryLink = z.string().trim().max(2048).refine(isGoogleDriveLink, 'Enter a valid Google Drive link.');
+  const galleryInput = z.object({ clientId: z.uuid(), driveLink: galleryLink });
+  api.post('/photo-galleries/batch', async (req, res) => {
+    const { clientId, driveLinks } = z.object({
+      clientId: z.uuid(),
+      driveLinks: z.array(galleryLink).min(1).max(maxGalleryLinksPerCreate)
+        .refine(links => new Set(links).size === links.length, 'Each Drive link must be different.'),
+    }).parse(req.body);
+    const createdAt = stamp();
+    const galleries = driveLinks.map(driveLink => ({ id: randomUUID(), clientId, driveLink, createdAt }));
+    res.status(201).json(await update(res, data => {
+      if (!data.clients.some(client => client.id === clientId)) throw new ApiError(422, 'Choose an existing client.');
+      return { data: galleries.reduce(addPhotoGallery, data), result: galleries };
+    }));
+  });
   api.post('/photo-galleries', async (req, res) => {
     const input = galleryInput.parse(req.body);
     const gallery = { ...input, id: randomUUID(), createdAt: stamp() };

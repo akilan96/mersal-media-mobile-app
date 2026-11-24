@@ -334,6 +334,17 @@ export function useCloudStudio(): StudioContext {
       const response = await apiRequest('/accounts', { method: 'POST', token: active.token, json: account });
       return await response.json() as ManagedAccount;
     },
+    async updateAccount(username, account) {
+      const active = session.current;
+      if (!active) throw new Error('Sign in to continue.');
+      const response = await apiRequest('/accounts/' + encodeURIComponent(username), { method: 'PATCH', token: active.token, json: account });
+      return await response.json() as ManagedAccount;
+    },
+    async deleteAccount(username) {
+      const active = session.current;
+      if (!active) throw new Error('Sign in to continue.');
+      await apiRequest('/accounts/' + encodeURIComponent(username), { method: 'DELETE', token: active.token });
+    },
     setup: (profile, secret, joinCode) => signIn('/auth/register', {
       username: profile.username, ...(/^\d{4}$/.test(secret) ? { pin: secret } : { password: secret }), profile, joinCode,
     }),
@@ -359,6 +370,7 @@ export function useCloudStudio(): StudioContext {
       return write(id ? '/photo-galleries/' + encodeURIComponent(id) : '/photo-galleries', id ? 'PATCH' : 'POST', { clientId, driveLink });
     },
     removePhotoGallery(id) { return write('/photo-galleries/' + encodeURIComponent(id), 'DELETE'); },
+    savePhotoGalleries(clientId, driveLinks) { return write('/photo-galleries/batch', 'POST', { clientId, driveLinks }); },
     addEventType(name) { return write('/event-types', 'POST', { name }); },
     async setHomePhoto(uri) {
       if (!uri) {
@@ -397,5 +409,6 @@ export function useCloudStudio(): StudioContext {
       });
     },
     deleteClient(id) { return write('/clients/' + id + '/inactive', 'PATCH'); },
+    reactivateClient(id) { return write('/clients/' + id + '/active', 'PATCH'); },
   };
 }

@@ -10,7 +10,7 @@ import { isGoogleDriveLink } from '../domain/validation';
 import { useStudio } from '../state/StudioProvider';
 import { ApiRequestError } from '../services/cloudApi';
 import { useStudioTheme, type Palette } from '../theme';
-import type { PhotoGallery } from '../domain/types';
+import { maxGalleryLinksPerCreate, type PhotoGallery } from '../domain/types';
 
 const sortChoices = ['Newest', 'Oldest', 'Client'] as const;
 type GallerySort = typeof sortChoices[number];
@@ -23,7 +23,7 @@ function galleryError(error: unknown, fallback: string) {
 }
 
 export function PhotosScreen() {
-  const { data, savePhotoGallery, removePhotoGallery } = useStudio();
+  const { data, savePhotoGallery, savePhotoGalleries, removePhotoGallery } = useStudio();
   const { colors, ui } = useStudioTheme();
   const styles = makeStyles(colors);
   const showToast = useToast();
@@ -36,7 +36,7 @@ export function PhotosScreen() {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [clientQuery, setClientQuery] = useState('');
   const [clientId, setClientId] = useState('');
-  const [driveLink, setDriveLink] = useState('');
+  const [driveLinks, setDriveLinks] = useState(['']);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
   const [listError, setListError] = useState('');
@@ -58,27 +58,33 @@ export function PhotosScreen() {
 
   function openForm(gallery?: PhotoGallery) {
     setEditingId(gallery?.id);
-    setClientId(gallery?.clientId ?? ''); setClientQuery(''); setDriveLink(gallery?.driveLink ?? ''); setFormError(''); setPickerOpen(false);
+    setClientId(gallery?.clientId ?? ''); setClientQuery(''); setDriveLinks([gallery?.driveLink ?? '']); setFormError(''); setPickerOpen(false);
     setFormVisible(true);
   }
 
   async function save() {
     if (saving) return;
     setFormError('');
-    const link = driveLink.trim();
+    const links = driveLinks.map(link => link.trim());
     if (!selectedClient) {
       setFormError('Choose an existing client.');
       return;
     }
-    if (!isGoogleDriveLink(link)) {
-      setFormError('Enter a Google Drive link starting with https://drive.google.com/.');
+    const invalidIndex = links.findIndex(link => !isGoogleDriveLink(link));
+    if (invalidIndex !== -1) {
+      setFormError(`Enter a valid Google Drive link for field ${invalidIndex + 1}.`);
+      return;
+    }
+    if (new Set(links).size !== links.length) {
+      setFormError('Each Drive link must be different.');
       return;
     }
     setSaving(true);
     try {
-      await savePhotoGallery(selectedClient.id, link, editingId);
+      if (editingId || links.length === 1) await savePhotoGallery(selectedClient.id, links[0], editingId);
+      else await savePhotoGalleries(selectedClient.id, links);
       setFormVisible(false);
-      showToast(editingId ? 'Photo gallery updated' : 'Photo gallery created');
+      showToast(editingId ? 'Photo gallery updated' : links.length === 1 ? 'Photo gallery created' : `${links.length} photo galleries created`);
     } catch (error) {
       setFormError(galleryError(error, 'Could not save the gallery.'));
     } finally { setSaving(false); }
@@ -167,11 +173,26 @@ export function PhotosScreen() {
                   </Pressable>)}
                 </View>}
               </View>
-              <Field label="Google Drive link" icon="link" placeholder="https://drive.google.com/…" value={driveLink}
-                onChangeText={value => { setDriveLink(value); setFormError(''); }} keyboardType="url"
-                autoCapitalize="none" autoCorrect={false} maxLength={2048} editable={!saving} />
+              {driveLinks.map((link, index) => <View key={index}>
+                <Field label={driveLinks.length === 1 ? 'Google Drive link' : `Google Drive link ${index + 1}`}
+                  icon="link" placeholder="https://drive.google.com/…" value={link}
+                  onChangeText={value => {
+                    setDriveLinks(current => current.map((item, position) => position === index ? value : item));
+                    setFormError('');
+                  }} keyboardType="url" autoCapitalize="none" autoCorrect={false} maxLength={2048} editable={!saving} />
+                {driveLinks.length > 1 && <Button title={`Remove link ${index + 1}`} icon="x" variant="ghost" disabled={saving}
+                  onPress={() => {
+                    setDriveLinks(current => current.filter((_, position) => position !== index));
+                    setFormError('');
+                  }} />}
+              </View>)}
+              {!editingId && <Button title="Add New Drive Link" icon="plus" variant="secondary"
+                disabled={saving || driveLinks.length >= maxGalleryLinksPerCreate}
+                onPress={() => setDriveLinks(current => current.length < maxGalleryLinksPerCreate ? [...current, ''] : current)} />}
+              {!editingId && driveLinks.length === maxGalleryLinksPerCreate && <Text style={ui.small}>10 links added</Text>}
               {!!formError && <ErrorMessage message={formError} />}
-              <Button title={editingId ? 'Save Changes' : 'Create Gallery'} icon="check" loading={saving} onPress={() => void save()} />
+              <Button title={editingId ? 'Save Changes' : driveLinks.length > 1 ? 'Create Galleries' : 'Create Gallery'}
+                icon="check" loading={saving} onPress={() => void save()} />
             </Card>
           </ScrollView>
         </KeyboardAvoidingView>

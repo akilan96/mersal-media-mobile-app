@@ -17,6 +17,7 @@ export interface StudioEvent {
 export interface Client { id: string; name: string; phone: string; email: string; notes: string; createdAt: string; inactive?: boolean }
 export interface Profile { name: string; studioName: string; username: string; phone: string; email: string }
 export interface PhotoGallery { id: string; clientId: string; driveLink: string; createdAt: string }
+export const maxGalleryLinksPerCreate = 10;
 export type ClientGallery = Pick<PhotoGallery, 'id' | 'driveLink' | 'createdAt'>;
 export type ClientGalleryList = { galleries: ClientGallery[]; previewsEnabled: boolean };
 export type DrivePhoto = { id: string; name: string; hasThumbnail: boolean };
