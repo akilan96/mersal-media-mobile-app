@@ -12,7 +12,13 @@
     },
     "android": {
       "package": "com.mersalmedia.studio",
-      "softwareKeyboardLayoutMode": "resize"
+      "softwareKeyboardLayoutMode": "resize",
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
+      ]
     },
     "plugins": [
       [
@@ -40,6 +46,11 @@
     ],
     "web": {
       "name": "Mersal Media"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "c49c398a-d88a-4ca8-b731-8551b55b8d60"
+      }
     }
   }
 }
