@@ -1,11 +1,12 @@
 import React, { useCallback, useState } from 'react';
-import { ActivityIndicator, Image, StyleSheet, Text, View } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import { ActivityIndicator, Alert, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { LinearGradient } from 'expo-linear-gradient';
-import Constants from 'expo-constants';
 import Feather from '@expo/vector-icons/Feather';
-import { Brand, Card, Header, IconButton, Screen } from '../components/ui';
+import { Brand, Button, Card, Header, Screen } from '../components/ui';
 import { AppearanceSetting } from '../components/AppearanceSetting';
+import { AmeyyWebsiteCard } from '../components/AmeyyWebsiteCard';
 import { MetricCard } from '../components/MetricCard';
 import { useStudio } from '../state/StudioProvider';
 import { useStudioTheme } from '../theme';
@@ -14,6 +15,7 @@ import type { ClientPaymentSummary, ClientPhotoSummary } from '../domain/types';
 import { ClientGalleryScreen } from './ClientPhotosScreen';
 
 export function ClientHomeScreen() {
+  const navigation = useNavigation<BottomTabNavigationProp<{ Photos: undefined; Favourites: undefined }>>();
   const { accountName, loadClientPayments, loadClientPhotoSummary, galleryChange } = useStudio();
   const { colors, ui, themeName } = useStudioTheme();
   const [payments, setPayments] = useState<ClientPaymentSummary | null>();
@@ -46,13 +48,24 @@ export function ClientHomeScreen() {
 
   return <Screen>
     <Brand />
-    <View style={[styles.greeting, { borderLeftColor: colors.primary }]}>
-      <Text style={ui.body}>{greeting()}</Text>
-      <Text accessibilityRole="header" style={ui.title}>{accountName ? `${accountName}!` : 'Welcome!'}</Text>
-    </View>
+    <LinearGradient colors={[colors.card, colors.mint]} style={[styles.homeHero, { borderColor: colors.border }]}>
+      <View style={styles.heroText}>
+        <Text style={ui.body}>{greeting()}</Text>
+        <Text accessibilityRole="header" style={ui.title}>{accountName || 'Welcome'}</Text>
+        <Button title="Open gallery" icon="image" onPress={() => navigation.navigate('Photos')} />
+      </View>
+      <Image source={require('../../assets/design/photos-hero.png')} style={styles.heroPhoto}
+        resizeMode="cover" accessible={false} />
+    </LinearGradient>
+    <Text accessibilityRole="header" style={ui.heading}>Your photos</Text>
     <View style={styles.photoMetrics}>
-      <MetricCard label="Total Photos" value={photos?.total ?? '—'} caption={photoError ? 'Could not refresh' : 'In your gallery'} icon="image" tone="mint" />
-      <MetricCard label="Selected Photos" value={photos?.selected ?? '—'} caption={photoError ? 'Could not refresh' : 'Your picks'} icon="check-circle" tone="blue" />
+      <MetricCard label="Total Photos" value={photos?.total ?? '—'} caption={photoError ? 'Could not refresh' : 'In your gallery'}
+        icon="image" tone="mint" onPress={() => navigation.navigate('Photos')} />
+      <MetricCard label="Selected Photos" value={photos?.selected ?? '—'} caption={photoError ? 'Could not refresh' : 'Your picks'}
+        icon="heart" tone="blue" onPress={() => navigation.navigate('Favourites')} />
+    </View>
+    <Text accessibilityRole="header" style={ui.heading}>Payments</Text>
+    <View style={styles.photoMetrics}>
       <MetricCard label="Total Payment" value={payments ? money(payments.total) : '—'} caption={caption || 'Booking total'} icon="credit-card" tone="teal" />
       <MetricCard label="Pending Payment" value={payments ? money(payments.pending) : '—'} caption={caption || 'Balance due'} icon="clock" tone="gold" />
     </View>
@@ -76,33 +89,42 @@ export function ClientFavouritesScreen() {
 export function ClientSettingsScreen() {
   const { lock } = useStudio();
   const { colors, ui } = useStudioTheme();
-  return <Screen>
-    <Header title="Settings" right={<IconButton name="log-out" label="Log out" onPress={lock} />} />
+
+  function confirmLogout() {
+    Alert.alert('Log out?', 'Sign in again to access your gallery.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Log out', style: 'destructive', onPress: lock },
+    ]);
+  }
+
+  return <Screen contentStyle={styles.settingsContent}>
+    <Header title="Settings" />
     <Card style={styles.appearance}><AppearanceSetting /></Card>
-    <Card style={ui.gap}>
-      <View style={ui.row}>
-        <Image source={require('../../assets/design/ameyy-logo.jpeg')} style={styles.logo} resizeMode="contain" accessible={false} />
-        <View style={ui.flex}>
-          <Text style={ui.label}>Ameyy Digital Services</Text>
-          <Text style={ui.small}>Digital With Intention</Text>
+    <Card style={styles.logoutCard}>
+      <Pressable accessibilityRole="button" onPress={confirmLogout}
+        style={({ pressed }) => [styles.logoutRow, pressed && { backgroundColor: colors.errorBg }]}>
+        <View style={[styles.settingsIcon, { backgroundColor: colors.errorBg }]}>
+          <Feather name="log-out" size={22} color={colors.error} />
         </View>
-      </View>
-      <View style={ui.between}>
-        <View style={ui.row}>
-          <Feather name="info" size={18} color={colors.primary} />
-          <Text style={ui.label}>App version</Text>
-        </View>
-        <Text style={ui.small}>{Constants.expoConfig?.version ?? '1.0.0'}</Text>
-      </View>
+        <Text style={[styles.logoutLabel, ui.flex, { color: colors.error }]}>Log out</Text>
+        <Feather name="chevron-right" size={22} color={colors.error} />
+      </Pressable>
     </Card>
+    <AmeyyWebsiteCard />
   </Screen>;
 }
 
 const styles = StyleSheet.create({
-  greeting: { marginTop: 8, paddingLeft: 12, borderLeftWidth: 4, gap: 4 },
+  homeHero: { borderRadius: 24, borderWidth: 1, overflow: 'hidden' },
+  heroText: { padding: 18, gap: 10 },
+  heroPhoto: { width: '100%', height: 140 },
   photoMetrics: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   trustCard: { marginTop: 20, flexDirection: 'row', alignItems: 'center', gap: 12, padding: 15, borderRadius: 18, borderWidth: 1 },
   trustIcon: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   appearance: { padding: 0 },
-  logo: { width: 44, height: 44, borderRadius: 9 },
+  logoutCard: { padding: 0, overflow: 'hidden' },
+  logoutRow: { flexDirection: 'row', alignItems: 'center', minHeight: 78, gap: 14, paddingHorizontal: 16 },
+  logoutLabel: { fontSize: 15, fontFamily: 'InterBold' },
+  settingsIcon: { width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  settingsContent: { flexGrow: 1 },
 });

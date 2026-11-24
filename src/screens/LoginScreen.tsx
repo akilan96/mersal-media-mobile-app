@@ -2,10 +2,21 @@ import React, { useEffect, useState } from 'react';
 import { apiRequest } from '../services/cloudApi';
 import { Image, Keyboard, Pressable, StyleSheet, Text, View } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
-import { Brand, Button, Card, ErrorMessage, Field, Screen } from '../components/ui';
+import { Button, Card, ErrorMessage, Field, Screen } from '../components/ui';
 import { PinField } from '../components/PinField';
 import { useStudio } from '../state/StudioProvider';
 import { useStudioTheme, type Palette } from '../theme';
+
+function LoginBrand() {
+  const { colors } = useStudioTheme();
+  const styles = makeStyles(colors);
+  return <View style={styles.brand}>
+    <View style={styles.logoFrame}>
+      <Image source={require('../../assets/design/brand-logo.png')} style={styles.logo} resizeMode="contain" accessible={false} />
+    </View>
+    <Text style={styles.wordmark}>MERSAL <Text style={styles.wordmarkAccent}>MEDIA</Text></Text>
+  </View>;
+}
 
 function LocalLoginScreen() {
   const { colors, ui } = useStudioTheme();
@@ -50,15 +61,9 @@ function LocalLoginScreen() {
   };
 
   return (
-    <Screen contentStyle={styles.content}>
-      <Image
-        source={require('../../assets/design/login-hero.png')}
-        resizeMode="contain"
-        style={styles.hero}
-        accessibilityLabel="Photography studio camera and prints"
-      />
-      <View style={styles.brand}><Brand /></View>
+    <Screen contentStyle={[styles.content, configured && styles.centerContent]}>
       <View style={styles.introduction}>
+        <LoginBrand />
         <Text accessibilityRole="header" style={styles.headline}>{configured ? 'Welcome Back' : 'Welcome to Your Studio'}</Text>
         <Text style={[ui.body, styles.centered]}>
           {configured ? 'Sign in to manage your studio events.' : 'Set up your profile and a four-digit device PIN.'}
@@ -71,7 +76,7 @@ function LocalLoginScreen() {
             <Field label="Studio name" value={studioName} onChangeText={setStudioName} error={errors.studioName} placeholder="Enter your studio name" autoCapitalize="words" editable={!busy} />
           </>
         ) : null}
-        <Field label="Username" value={username} onChangeText={setUsername} error={errors.username} placeholder="Enter your username" autoCapitalize="none" autoCorrect={false} autoComplete="username" editable={!busy} />
+        <Field label="Username" style={styles.usernameInput} value={username} onChangeText={setUsername} error={errors.username} placeholder="Enter your username" autoCapitalize="none" autoCorrect={false} autoComplete="username" editable={!busy} />
         {!configured ? (
           <>
             <Field label="Email (optional)" value={email} onChangeText={setEmail} error={errors.email} placeholder="you@yourstudio.com" keyboardType="email-address" autoCapitalize="none" autoComplete="email" editable={!busy} />
@@ -90,7 +95,7 @@ function LocalLoginScreen() {
             <Feather name={revealed ? 'eye-off' : 'eye'} size={20} color={colors.muted} />
           </Pressable>
         </View>
-        <PinField label="4-digit PIN" value={pin} onChange={setPin} revealed={revealed} disabled={busy} error={errors.pin} />
+        <PinField label="4 Digit PIN" value={pin} onChange={setPin} revealed={revealed} disabled={busy} error={errors.pin} />
         {!configured ? <PinField label="Confirm PIN" value={confirmPin} onChange={setConfirmPin} revealed={revealed} disabled={busy} error={errors.confirmPin} /> : null}
         {configured ? (
           <Pressable accessibilityRole="button" accessibilityState={{ expanded: showRecovery }} onPress={() => setShowRecovery(!showRecovery)} style={styles.recoveryButton}>
@@ -154,43 +159,50 @@ function CloudLoginScreen() {
   }
 
   return (
-    <Screen contentStyle={styles.cloudContent}>
+    <Screen contentStyle={styles.centerContent}>
       <View style={styles.cloudPanel}>
-        <View style={styles.cloudHeading}>
-          <Brand />
-          <Text accessibilityRole="header" style={[styles.headline, styles.cloudHeadline]}>Sign In to Your Studio</Text>
-        </View>
+        <LoginBrand />
         <View style={styles.cloudForm}>
-          <Field label="Studio username" labelStyle={styles.cloudLabel} style={styles.cloudInput} icon="user"
+          <View pointerEvents="none" style={styles.formAccent} />
+          <Text accessibilityRole="header" style={styles.cloudHeadline}>Sign In</Text>
+          <Field label="Username" labelStyle={styles.cloudLabel} style={styles.usernameInput} icon="user" variant="studio-form"
             value={username} onChangeText={setUsername} autoCapitalize="none" autoCorrect={false} autoComplete="username" maxLength={40} editable={!busy} />
-          {pinMode ? <PinField label="4-digit studio PIN" largeLabel value={secret} onChange={setSecret} revealed={false} disabled={busy} />
-            : <Field label="Studio password" labelStyle={styles.cloudLabel} style={styles.cloudInput} icon="lock" value={secret}
+          {pinMode ? <PinField label="4 Digit PIN" largeLabel value={secret} onChange={setSecret} revealed={false} disabled={busy} />
+            : <Field label="Password" labelStyle={styles.cloudLabel} style={styles.cloudInput} icon="lock" variant="studio-form" value={secret}
               onChangeText={setSecret} secureTextEntry autoCapitalize="none" autoCorrect={false} autoComplete="current-password" maxLength={128} editable={!busy} />}
           {error ? <ErrorMessage message={error} /> : null}
-          <Button title="Sign In" onPress={submit} icon="arrow-right" loading={busy} disabled={busy} textStyle={styles.cloudButtonText} />
+          <Button title="Sign In" onPress={submit} icon="arrow-right" loading={busy} disabled={busy}
+            style={styles.cloudButton} textStyle={styles.cloudButtonText} />
         </View>
-        <Image source={require('../../assets/design/sign-in-camera.jpg')} resizeMode="cover" style={styles.cloudHero} accessible={false} />
       </View>
     </Screen>
   );
 }
 const makeStyles = (colors: Palette) => StyleSheet.create({
-  content: { gap: 22, paddingTop: 12, paddingBottom: 32 },
-  cloudContent: { paddingTop: 20 },
-  cloudPanel: { width: '100%', maxWidth: 420, alignSelf: 'center', gap: 16 },
-  cloudHero: { width: '68%', maxWidth: 248, aspectRatio: 3.3, alignSelf: 'center', borderRadius: 12 },
-  cloudHeading: { alignItems: 'center', gap: 10 },
-  cloudHeadline: { fontSize: 29, lineHeight: 35 },
-  cloudForm: { gap: 14, padding: 14, borderRadius: 20, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card },
+  content: { gap: 22, paddingTop: 24, paddingBottom: 32 },
+  centerContent: { flexGrow: 1, justifyContent: 'center', paddingTop: 28 },
+  cloudPanel: { width: '100%', maxWidth: 392, alignSelf: 'center', gap: 23 },
+  cloudHeadline: { color: colors.text, fontFamily: 'InterExtraBold', letterSpacing: -0.9, fontSize: 32, lineHeight: 40, textAlign: 'center' },
+  cloudForm: {
+    gap: 18, paddingHorizontal: 19, paddingTop: 26, paddingBottom: 20, borderRadius: 28, borderWidth: 1,
+    borderColor: colors.border, backgroundColor: colors.card, elevation: 3, shadowColor: colors.primaryDark,
+    shadowOpacity: 0.12, shadowRadius: 15, shadowOffset: { width: 0, height: 6 },
+  },
+  formAccent: { position: 'absolute', top: 0, alignSelf: 'center', width: 56, height: 3, borderBottomLeftRadius: 3, borderBottomRightRadius: 3, backgroundColor: colors.primary },
   cloudLabel: { fontSize: 16, lineHeight: 22 },
   cloudInput: { fontSize: 17 },
+  usernameInput: { fontFamily: 'InterSemiBold', fontSize: 19, letterSpacing: 0.25 },
+  cloudButton: { marginTop: 4, borderRadius: 16 },
   cloudButtonText: { fontSize: 17 },
-  hero: { width: '100%', height: 180 },
-  brand: { alignItems: 'center' },
+  brand: { alignItems: 'center', gap: 12 },
+  logoFrame: { padding: 5, borderRadius: 23, backgroundColor: colors.mint, borderWidth: 1, borderColor: colors.border },
+  logo: { width: 64, height: 64, borderRadius: 18 },
+  wordmark: { color: colors.text, fontFamily: 'InterExtraBold', fontSize: 15, letterSpacing: 2, textAlign: 'center' },
+  wordmarkAccent: { color: colors.primaryDark },
   introduction: { gap: 8, alignItems: 'center' },
   headline: { color: colors.text, fontSize: 29, fontFamily: 'InterExtraBold', letterSpacing: -0.8, textAlign: 'center' },
   centered: { textAlign: 'center' },
-  form: { gap: 18 },
+  form: { width: '100%', maxWidth: 420, alignSelf: 'center', gap: 18 },
   pinLabelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: -12 },
   visibilityButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   recoveryButton: { minHeight: 44, justifyContent: 'center', alignItems: 'flex-end' },

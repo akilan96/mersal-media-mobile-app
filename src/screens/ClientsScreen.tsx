@@ -19,7 +19,7 @@ const blankClient: ClientInput = { name: '', phone: '', email: '', notes: '' };
 const failureMessage = (error: unknown) => error instanceof Error ? error.message : 'Something went wrong. Please try again.';
 
 function nextEvent(events: StudioEvent[], now: Date): StudioEvent | undefined {
-  const active = events.filter(event => event.status !== 'Cancelled');
+  const active = events.filter(event => !event.inactive && event.status !== 'Cancelled');
   const upcoming = upcomingEvents(active, now);
   return [...(upcoming.length ? upcoming : active.length ? active : events)].sort((left, right) => upcoming.length
     ? new Date(left.date).getTime() - new Date(right.date).getTime()
@@ -58,7 +58,7 @@ export default function ClientsScreen() {
   const clients = useMemo(() => {
     const search = query.trim().toLowerCase();
     return groups.filter(({ client, events }) => {
-      const matchesQuery = !search || [client.name, client.phone, client.email, ...events.map(event => event.title)]
+      const matchesQuery = !search ? !client.inactive : [client.name, client.phone, client.email, ...events.map(event => event.title)]
         .some(value => value.toLowerCase().includes(search));
       return matchesQuery;
     }).sort((left, right) => {
@@ -107,17 +107,14 @@ export default function ClientsScreen() {
     finally { setBusy(false); }
   }
 
-  function confirmDelete(client: Client, linkedCount: number) {
-    if (linkedCount) {
-      Alert.alert('Client has linked events', 'Edit those events and remove this client before deleting their contact. Your event records will stay intact.');
-      return;
-    }
-    Alert.alert('Delete client?', `Remove ${client.name} from this device? This cannot be undone.`, [
+  function confirmDelete(client: Client) {
+    Alert.alert('Make client inactive?', `${client.name} will be hidden from the list. Search for them to view their details.`, [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: () => {
+      { text: 'Make inactive', style: 'destructive', onPress: () => {
         setError('');
         setDeletingId(client.id);
-        deleteClient(client.id).catch(exception => setError(failureMessage(exception))).finally(() => setDeletingId(null));
+        void deleteClient(client.id).then(() => showToast('Client marked inactive'))
+          .catch(exception => setError(failureMessage(exception))).finally(() => setDeletingId(null));
       } },
     ]);
   }
@@ -174,6 +171,7 @@ export default function ClientsScreen() {
                       <Text numberOfLines={1} style={[ui.small, ui.flex]}>{client.phone || client.email}</Text>
                     </View> : null}
                   </Pressable>
+                  {client.inactive && <Badge label="Inactive" tone="neutral" />}
                 </View>
                 {event ? (
                   <Pressable onPress={() => navigation.navigate('EventDetails', { eventId: event.id })} accessibilityRole="button"
@@ -200,7 +198,7 @@ export default function ClientsScreen() {
                   <ClientAction icon="message-circle" label={`Message ${client.name}`} color={colors.success} onPress={() => message(client)} />
                 </> : null}
                 <ClientAction icon="edit-2" label={`Edit ${client.name}`} color={colors.primaryDark} onPress={() => openForm(client)} />
-                <ClientAction icon="trash-2" label={`Delete ${client.name}`} color={colors.error} disabled={Boolean(deletingId)} onPress={() => confirmDelete(client, events.length)} />
+                {!client.inactive && <ClientAction icon="trash-2" label={`Make ${client.name} inactive`} color={colors.error} disabled={Boolean(deletingId)} onPress={() => confirmDelete(client)} />}
                 </View>
               </View>
             </Card>;

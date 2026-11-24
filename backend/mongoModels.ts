@@ -13,6 +13,7 @@ export const profileSchema = new Schema({
 }, nested);
 
 const clientFields = {
+  inactive: Boolean,
   name: { type: String, required: true, maxlength: 100 },
   phone: { type: String, default: '' },
   email: { type: String, default: '' },
@@ -29,6 +30,7 @@ export const paymentSchema = new Schema({
 }, nested);
 
 const eventFields = {
+  inactive: Boolean,
   title: { type: String, required: true, maxlength: 180 },
   date: { type: String, required: true },
   location: { type: String, required: true, maxlength: 250 },

@@ -301,7 +301,7 @@ export function createExpressApi(store: StudioStore, app = express(), sharedSign
   });
 
   api.get('/dashboard', async (_req, res) => {
-    const { events } = (await load(res)).data;
+    const events = (await load(res)).data.events.filter(event => !event.inactive);
     const upcoming = upcomingEvents(events);
     res.json({
       total: events.filter(event => event.status !== 'Cancelled').length, upcoming: upcoming.length,
@@ -339,13 +339,39 @@ export function createExpressApi(store: StudioStore, app = express(), sharedSign
     });
     res.sendStatus(204);
   });
+  api.patch('/clients/:id/inactive', async (req, res) => {
+    await update(res, data => {
+      if (!data.clients.some(client => client.id === req.params.id)) throw new ApiError(404, 'Client not found.');
+      return { data: { ...data, clients: data.clients.map(client => client.id === req.params.id ? { ...client, inactive: true } : client) }, result: null };
+    });
+    res.sendStatus(204);
+  });
+  const galleryInput = z.object({ clientId: z.uuid(), driveLink: z.string().trim().max(2048).refine(isGoogleDriveLink, 'Enter a valid Google Drive link.') });
   api.post('/photo-galleries', async (req, res) => {
-    const input = z.object({ clientId: z.uuid(), driveLink: z.string().trim().refine(isGoogleDriveLink, 'Enter a valid Google Drive link.') }).parse(req.body);
+    const input = galleryInput.parse(req.body);
     const gallery = { ...input, id: randomUUID(), createdAt: stamp() };
     res.status(201).json(await update(res, data => {
       if (!data.clients.some(client => client.id === input.clientId)) throw new ApiError(422, 'Choose an existing client.');
       return { data: addPhotoGallery(data, gallery), result: gallery };
     }));
+  });
+  api.patch('/photo-galleries/:id', async (req, res) => {
+    const input = galleryInput.parse(req.body);
+    res.json(await update(res, data => {
+      const prior = data.photoGalleries?.find(gallery => gallery.id === req.params.id);
+      if (!prior) throw new ApiError(404, 'Gallery not found.');
+      if (!data.clients.some(client => client.id === input.clientId)) throw new ApiError(422, 'Choose an existing client.');
+      const gallery = { ...prior, ...input };
+      return { data: addPhotoGallery(data, gallery), result: gallery };
+    }));
+  });
+  api.delete('/photo-galleries/:id', async (req, res) => {
+    await update(res, data => {
+      const galleries = data.photoGalleries ?? [];
+      if (!galleries.some(gallery => gallery.id === req.params.id)) throw new ApiError(404, 'Gallery not found.');
+      return { data: { ...data, photoGalleries: galleries.filter(gallery => gallery.id !== req.params.id) }, result: null };
+    });
+    res.sendStatus(204);
   });
 
   api.get('/events', async (_req, res) => { res.json((await load(res)).data.events); });
@@ -408,6 +434,13 @@ export function createExpressApi(store: StudioStore, app = express(), sharedSign
     await update(res, data => {
       const { id } = eventById(data, req.params.id);
       return { data: { ...data, events: data.events.filter(event => event.id !== id) }, result: null };
+    });
+    res.sendStatus(204);
+  });
+  api.patch('/events/:id/inactive', async (req, res) => {
+    await update(res, data => {
+      const event = eventById(data, req.params.id);
+      return { data: { ...data, events: data.events.map(item => item.id === event.id ? { ...item, inactive: true } : item) }, result: null };
     });
     res.sendStatus(204);
   });

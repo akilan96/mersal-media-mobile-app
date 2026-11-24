@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { PagedList } from '../components/PagedList';
@@ -8,13 +8,22 @@ import { useToast } from '../components/Toast';
 import { formatDate } from '../domain/helpers';
 import { isGoogleDriveLink } from '../domain/validation';
 import { useStudio } from '../state/StudioProvider';
+import { ApiRequestError } from '../services/cloudApi';
 import { useStudioTheme, type Palette } from '../theme';
+import type { PhotoGallery } from '../domain/types';
 
 const sortChoices = ['Newest', 'Oldest', 'Client'] as const;
 type GallerySort = typeof sortChoices[number];
 
+function galleryError(error: unknown, fallback: string) {
+  if (error instanceof ApiRequestError && error.status === 404 && /^endpoint not found\.?$/i.test(error.message)) {
+    return 'This action requires the updated studio API. Deploy the latest backend to Vercel and try again.';
+  }
+  return error instanceof Error ? error.message : fallback;
+}
+
 export function PhotosScreen() {
-  const { data, savePhotoGallery } = useStudio();
+  const { data, savePhotoGallery, removePhotoGallery } = useStudio();
   const { colors, ui } = useStudioTheme();
   const styles = makeStyles(colors);
   const showToast = useToast();
@@ -22,6 +31,8 @@ export function PhotosScreen() {
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<GallerySort>('Newest');
   const [formVisible, setFormVisible] = useState(false);
+  const [editingId, setEditingId] = useState<string>();
+  const [removingId, setRemovingId] = useState<string>();
   const [pickerOpen, setPickerOpen] = useState(false);
   const [clientQuery, setClientQuery] = useState('');
   const [clientId, setClientId] = useState('');
@@ -45,8 +56,9 @@ export function PhotosScreen() {
   const selectedClient = data.clients.find(client => client.id === clientId);
   const matchingClients = data.clients.filter(client => client.name.toLowerCase().includes(clientQuery.trim().toLowerCase()));
 
-  function openForm() {
-    setClientId(''); setClientQuery(''); setDriveLink(''); setFormError(''); setPickerOpen(false);
+  function openForm(gallery?: PhotoGallery) {
+    setEditingId(gallery?.id);
+    setClientId(gallery?.clientId ?? ''); setClientQuery(''); setDriveLink(gallery?.driveLink ?? ''); setFormError(''); setPickerOpen(false);
     setFormVisible(true);
   }
 
@@ -64,12 +76,28 @@ export function PhotosScreen() {
     }
     setSaving(true);
     try {
-      await savePhotoGallery(selectedClient.id, link);
+      await savePhotoGallery(selectedClient.id, link, editingId);
       setFormVisible(false);
-      showToast('Photo gallery created');
+      showToast(editingId ? 'Photo gallery updated' : 'Photo gallery created');
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : 'Could not save the gallery.');
+      setFormError(galleryError(error, 'Could not save the gallery.'));
     } finally { setSaving(false); }
+  }
+
+  function confirmRemove(gallery: PhotoGallery) {
+    Alert.alert('Remove gallery?', 'This removes the gallery link from the app. The photos remain in Google Drive.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Remove', style: 'destructive', onPress: async () => {
+        setRemovingId(gallery.id);
+        setListError('');
+        try {
+          await removePhotoGallery(gallery.id);
+          showToast('Photo gallery removed');
+        } catch (error) {
+          setListError(galleryError(error, 'Could not remove the gallery.'));
+        } finally { setRemovingId(undefined); }
+      } },
+    ]);
   }
 
   function openDrive(link: string) {
@@ -79,7 +107,7 @@ export function PhotosScreen() {
 
   return <>
     <PagedList items={galleries} scope={JSON.stringify([query, sort])}
-      createAction={{ label: 'Create photo gallery', onPress: openForm }}
+      createAction={{ label: 'Create photo gallery', onPress: () => openForm() }}
       header={<View style={ui.gap}>
         <Header title="Photos" />
         <Field icon="search" accessibilityLabel="Search photo galleries" placeholder="Search client or Drive link"
@@ -104,6 +132,11 @@ export function PhotosScreen() {
           </View>
           <Feather name="external-link" size={19} color={colors.primaryDark} />
         </Pressable>
+        <View style={styles.galleryActions}>
+          <Button title="Edit" icon="edit-2" variant="ghost" disabled={!!removingId} onPress={() => openForm(item)} />
+          <Button title="Remove" icon="trash-2" variant="danger" disabled={!!removingId}
+            loading={removingId === item.id} onPress={() => confirmRemove(item)} />
+        </View>
       </Card>}
     />
     <Modal visible={formVisible} animationType="slide" presentationStyle="pageSheet"
@@ -111,7 +144,7 @@ export function PhotosScreen() {
       <SafeAreaView style={styles.modal} edges={['top', 'bottom', 'left', 'right']}>
         <KeyboardAvoidingView style={ui.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.form}>
-            <Header title="Create Photo Gallery" onBack={() => { if (!saving) setFormVisible(false); }} />
+            <Header title={editingId ? 'Edit Photo Gallery' : 'Create Photo Gallery'} onBack={() => { if (!saving) setFormVisible(false); }} />
             <Card style={ui.gap}>
               <View style={styles.clientField}>
                 <Text style={ui.label}>Client name</Text>
@@ -138,7 +171,7 @@ export function PhotosScreen() {
                 onChangeText={value => { setDriveLink(value); setFormError(''); }} keyboardType="url"
                 autoCapitalize="none" autoCorrect={false} maxLength={2048} editable={!saving} />
               {!!formError && <ErrorMessage message={formError} />}
-              <Button title="Create Gallery" icon="check" loading={saving} onPress={() => void save()} />
+              <Button title={editingId ? 'Save Changes' : 'Create Gallery'} icon="check" loading={saving} onPress={() => void save()} />
             </Card>
           </ScrollView>
         </KeyboardAvoidingView>
@@ -153,6 +186,7 @@ const makeStyles = (colors: Palette) => StyleSheet.create({
   galleryRow: { flexDirection: 'row', alignItems: 'center', padding: 14, gap: 12, minHeight: 72 },
   galleryIcon: { width: 42, height: 42, borderRadius: 12, backgroundColor: colors.mint, justifyContent: 'center', alignItems: 'center' },
   galleryDetails: { flex: 1, minWidth: 0, gap: 3 },
+  galleryActions: { flexDirection: 'row', justifyContent: 'flex-end', flexWrap: 'wrap', gap: 8, paddingHorizontal: 12, paddingBottom: 12 },
   modal: { flex: 1, backgroundColor: colors.background },
   form: { paddingHorizontal: 16, paddingVertical: 14, gap: 14 },
   clientField: { gap: 8 },

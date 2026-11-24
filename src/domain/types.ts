@@ -12,8 +12,9 @@ export interface StudioEvent {
   id: string; title: string; date: string; location: string; attendees: number;
   type: EventType; status: EventStatus; clientId?: string; crew: string[];
   equipment: string[]; totalAmount: number; payments: Payment[]; notes: string; createdAt: string;
+  inactive?: boolean;
 }
-export interface Client { id: string; name: string; phone: string; email: string; notes: string; createdAt: string }
+export interface Client { id: string; name: string; phone: string; email: string; notes: string; createdAt: string; inactive?: boolean }
 export interface Profile { name: string; studioName: string; username: string; phone: string; email: string }
 export interface PhotoGallery { id: string; clientId: string; driveLink: string; createdAt: string }
 export type ClientGallery = Pick<PhotoGallery, 'id' | 'driveLink' | 'createdAt'>;
@@ -23,8 +24,8 @@ export type DrivePhotoPage = { photos: DrivePhoto[]; nextPageToken?: string };
 export type ClientPhotoSummary = { total: number; selected: number };
 export const drivePhotoPageSize = 6;
 export interface StudioData { version: 1; profile: Profile | null; events: StudioEvent[]; clients: Client[]; theme?: ThemeName; homePhoto?: string; customEventTypes?: string[]; photoGalleries?: PhotoGallery[] }
-export type EventInput = Omit<StudioEvent, 'id' | 'createdAt'>;
-export type ClientInput = Omit<Client, 'id' | 'createdAt'>;
+export type EventInput = Omit<StudioEvent, 'id' | 'createdAt' | 'inactive'>;
+export type ClientInput = Omit<Client, 'id' | 'createdAt' | 'inactive'>;
 export type EventListFilter = 'all' | 'total' | 'upcoming' | 'completed' | 'editing';
 export type MainTabParamList = { Home: undefined; Events: { filter: EventListFilter; openedAt?: number } | undefined; Photos: undefined; Clients: undefined; Settings: undefined };
 export type RootStackParamList = {

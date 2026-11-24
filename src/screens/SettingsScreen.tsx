@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { Alert, Image, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { AmeyyWebsiteCard } from '../components/AmeyyWebsiteCard';
 import Feather from '@expo/vector-icons/Feather';
-import Constants from 'expo-constants';
 import { Brand, Button, CameraArt, Card, ErrorMessage, Field, Header, IconButton, Screen } from '../components/ui';
 import { useToast } from '../components/Toast';
 import { defaultEventTypes, type Profile } from '../domain/types';
@@ -56,6 +56,8 @@ export default function SettingsScreen() {
       if (Platform.OS === 'web') {
         if (!photo.base64 || photo.base64.length > 2_000_000) throw new Error('Choose a smaller photo for the browser preview.');
         await setHomePhoto('data:image/jpeg;base64,' + photo.base64);
+        setPanel(null);
+        showToast('Home photo updated');
         return;
       }
       const folder = FileSystem.documentDirectory;
@@ -70,6 +72,8 @@ export default function SettingsScreen() {
         throw cause;
       }
       await removeHomePhotoFile(data.homePhoto);
+      setPanel(null);
+      showToast('Home photo updated');
     });
   }
   const profile = data.profile ?? blankProfile;
@@ -109,7 +113,7 @@ export default function SettingsScreen() {
     setErrors(issues);
     if (Object.keys(issues).length) return;
     setBusy(true); setError('');
-    try { await saveProfile(clean); setPanel(null); }
+    try { await saveProfile(clean); setPanel(null); showToast('Profile updated'); }
     catch (exception) { setError(failureMessage(exception)); }
     finally { setBusy(false); }
   }
@@ -126,7 +130,7 @@ export default function SettingsScreen() {
     try {
       await changePin(currentPin, newPin);
       setPanel(null); setCurrentPin(''); setNewPin(''); setConfirmPin('');
-      Alert.alert('PIN updated', 'Use your new PIN the next time you unlock this studio.');
+      showToast('PIN updated');
     } catch (exception) { setError(failureMessage(exception)); }
     finally { setBusy(false); }
   }
@@ -138,7 +142,7 @@ export default function SettingsScreen() {
   }
 
   return (
-    <Screen>
+    <Screen contentStyle={{ flexGrow: 1 }}>
       <Brand />
       <Card style={styles.profileCard}>
         <View style={styles.profileGlow} />
@@ -192,20 +196,7 @@ export default function SettingsScreen() {
         <Feather name="smartphone" size={17} color={colors.primary} />
         <Text style={[ui.small, ui.flex]}>Events and clients are stored on this device. Your PIN locks access to the app.</Text>
       </View>}
-      <Card>
-        <View style={ui.row}>
-          <Image source={require('../../assets/design/ameyy-logo.jpeg')} style={styles.companyLogo} resizeMode="contain" />
-          <View style={ui.flex}>
-            <Text style={ui.label}>Ameyy Digital Services</Text>
-            <Text style={ui.small}>Digital With Intention</Text>
-          </View>
-        </View>
-        <View style={styles.settingRow}>
-          <View style={styles.settingIcon}><Feather name="info" size={22} color={colors.primary} /></View>
-          <Text style={[styles.rowTitle, ui.flex]}>App version</Text>
-          <Text style={styles.rowValue}>{Constants.expoConfig?.version ?? '1.0.0'}</Text>
-        </View>
-      </Card>
+      <AmeyyWebsiteCard />
       <Modal visible={panel !== null} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => { if (!busy && !settingsBusy) setPanel(panel === 'newType' ? 'types' : null); }}>
         <SafeAreaView style={styles.modal} edges={['top', 'bottom']}>
           <KeyboardAvoidingView style={ui.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -219,6 +210,8 @@ export default function SettingsScreen() {
           onPress={() => void updateSettings(async () => {
             await setHomePhoto(undefined);
             await removeHomePhotoFile(data.homePhoto);
+            setPanel(null);
+            showToast('Default Home photo restored');
           })} />}
               </Card>}
               {panel === 'types' && (
@@ -291,7 +284,6 @@ const makeStyles = (colors: Palette) => StyleSheet.create({
   eventTypeIcon: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: 11, backgroundColor: colors.mint },
   eventTypeLabel: { flex: 1, fontSize: 15 },
   appearanceRow: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
-  companyLogo: { width: 56, height: 42, borderRadius: 6 },
   profileCard: { overflow: 'hidden', marginTop: 16, marginBottom: 4 },
   profileGlow: { position: 'absolute', bottom: -65, right: -20, width: 250, height: 130, borderRadius: 100, backgroundColor: colors.mint },
   profileRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },

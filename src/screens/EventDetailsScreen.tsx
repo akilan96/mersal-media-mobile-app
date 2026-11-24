@@ -73,11 +73,15 @@ export default function EventDetailsScreen() {
   }
   function confirmDelete() {
     if (!event || busy) return;
-    Alert.alert('Delete this event?', `“${event.title}” and its payment records will be permanently removed from this device.`, [
+    Alert.alert('Make this event inactive?', `“${event.title}” will be hidden from the list. You can still find it by searching.`, [
       { text: 'Keep event', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: async () => {
+      { text: 'Make inactive', style: 'destructive', onPress: async () => {
         setBusy(true); setError('');
-        try { await deleteEvent(event.id); navigation.popToTop(); } catch (cause) { fail(cause); } finally { setBusy(false); }
+        try {
+          await deleteEvent(event.id);
+          navigation.popToTop();
+          showToast('Event marked inactive');
+        } catch (cause) { fail(cause); } finally { setBusy(false); }
       } },
     ]);
   }
@@ -144,7 +148,7 @@ export default function EventDetailsScreen() {
     if (!event || busy) return;
     Alert.alert('Event actions', event.title, [
       { text: 'Edit event', onPress: () => navigation.navigate('CreateEvent', { eventId: event.id }) },
-      { text: 'Delete event', style: 'destructive', onPress: confirmDelete },
+      ...(!event.inactive ? [{ text: 'Make inactive', style: 'destructive' as const, onPress: confirmDelete }] : []),
       { text: 'Close', style: 'cancel' },
     ]);
   }
@@ -158,7 +162,7 @@ export default function EventDetailsScreen() {
       <DetailRow icon="calendar" text={`${formatDate(event.date)} · ${formatTime(event.date)}`} />
       <DetailRow icon="map-pin" text={event.location} />
       {!!client && <DetailRow icon="user" text={`${client.name}${client.phone ? ` · ${client.phone}` : ''}`} />}
-      <View style={{ alignSelf: 'flex-start' }}><Badge label={event.status} tone={event.status === 'Completed' ? 'success' : event.status === 'Cancelled' ? 'error' : 'teal'} /></View>
+      <View style={ui.row}><Badge label={event.status} tone={event.status === 'Completed' ? 'success' : event.status === 'Cancelled' ? 'error' : 'teal'} />{event.inactive && <Badge label="Inactive" tone="neutral" />}</View>
     </Card>
     <Card style={ui.gap}>
       <View style={ui.between}><Text style={ui.heading}>Amount Summary</Text><Badge label={paymentLabel(event)} tone={balanceAmount(event) <= 0 ? 'success' : 'warning'} /></View>

@@ -296,10 +296,13 @@ export function useCloudStudio(): StudioContext {
   async function setGalleryFavourite(galleryId: string, photoId: string, selected: boolean) {
     const active = session.current;
     if (!active) throw new Error('Sign in to continue.');
-    await apiRequest('/client/galleries/' + encodeURIComponent(galleryId) + '/photos/' + encodeURIComponent(photoId) + '/favourite', {
-      method: 'PUT', token: active.token, json: { selected },
+    await enqueue(async () => {
+      if (session.current !== active) throw new Error('Sign in to continue.');
+      await apiRequest('/client/galleries/' + encodeURIComponent(galleryId) + '/photos/' + encodeURIComponent(photoId) + '/favourite', {
+        method: 'PUT', token: active.token, json: { selected },
+      });
+      if (session.current === active) setGalleryChange({ id: galleryId });
     });
-    if (session.current === active) setGalleryChange({ id: galleryId });
   }
 
   function galleryThumbnail(galleryId: string, photoId: string, large?: boolean, name?: string) {
@@ -352,7 +355,10 @@ export function useCloudStudio(): StudioContext {
         throw error;
       }
     },
-    savePhotoGallery(clientId, driveLink) { return write('/photo-galleries', 'POST', { clientId, driveLink }); },
+    savePhotoGallery(clientId, driveLink, id) {
+      return write(id ? '/photo-galleries/' + encodeURIComponent(id) : '/photo-galleries', id ? 'PATCH' : 'POST', { clientId, driveLink });
+    },
+    removePhotoGallery(id) { return write('/photo-galleries/' + encodeURIComponent(id), 'DELETE'); },
     addEventType(name) { return write('/event-types', 'POST', { name }); },
     async setHomePhoto(uri) {
       if (!uri) {
@@ -383,13 +389,13 @@ export function useCloudStudio(): StudioContext {
       });
     },
     setEventStatus(id, status) { return write('/events/' + id + '/status', 'PATCH', { status }); },
-    deleteEvent(id) { return write('/events/' + id, 'DELETE'); },
+    deleteEvent(id) { return write('/events/' + id + '/inactive', 'PATCH'); },
     saveClient(input, id) {
       return mutate(async token => {
         const response = await apiRequest(id ? '/clients/' + id : '/clients', { token, method: id ? 'PATCH' : 'POST', json: input });
         return (await response.json()).id as string;
       });
     },
-    deleteClient(id) { return write('/clients/' + id, 'DELETE'); },
+    deleteClient(id) { return write('/clients/' + id + '/inactive', 'PATCH'); },
   };
 }

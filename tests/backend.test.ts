@@ -54,6 +54,45 @@ test('Drive thumbnails verify folder membership when file metadata omits parents
   assert.equal(thumbnailRequests, 2);
 });
 
+test('liking a photo records its source and unliking restores it to that folder', async t => {
+  const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048, privateKeyEncoding: { type: 'pkcs8', format: 'pem' }, publicKeyEncoding: { type: 'spki', format: 'pem' } });
+  let folderName = 'Favourites';
+  let photoParent = 'gallery';
+  let recordedSource: string | null = null;
+  t.mock.method(globalThis, 'fetch', async (input: string, init?: RequestInit) => {
+    const url = new URL(input);
+    if (url.hostname === 'oauth2.googleapis.com') return Response.json({ access_token: 'fake-token' });
+    if (init?.method === 'GET' && url.pathname.endsWith('/photo')) {
+      return Response.json({ id: 'photo', mimeType: 'image/jpeg', parents: [photoParent],
+        appProperties: recordedSource ? { mersalSelectionSource: recordedSource } : {} });
+    }
+    if (init?.method === 'GET') return Response.json({ files: [{ id: 'choices', name: folderName }] });
+    assert.equal(init?.method, 'PATCH');
+    if (url.pathname.endsWith('/choices')) {
+      folderName = JSON.parse(String(init?.body)).name;
+      return Response.json({ id: 'choices' });
+    }
+    assert.equal(url.pathname, '/drive/v3/files/photo');
+    assert.equal(url.searchParams.get('removeParents'), photoParent);
+    recordedSource = JSON.parse(String(init?.body)).appProperties.mersalSelectionSource;
+    photoParent = url.searchParams.get('addParents') ?? '';
+    return Response.json({ id: 'photo' });
+  });
+  const drive = createDriveReader({ GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON: JSON.stringify({ private_key: privateKey, client_email: 'reader@example.com' }) })!;
+  const link = 'https://drive.google.com/drive/folders/gallery';
+  await drive.setFavourite(link, 'photo', true);
+  assert.equal(folderName, 'Client_Choosen');
+  assert.equal(photoParent, 'choices');
+  assert.equal(recordedSource, 'gallery');
+  recordedSource = 'another-gallery';
+  await assert.rejects(drive.setFavourite(link, 'photo', false), { status: 409 });
+  assert.equal(photoParent, 'choices');
+  recordedSource = 'gallery';
+  await drive.setFavourite(link, 'photo', false);
+  assert.equal(photoParent, 'gallery');
+  assert.equal(recordedSource, null);
+});
+
 test('studio API persists private data and validates event and client workflows', async () => {
   const folder = mkdtempSync(join(tmpdir(), 'mersal-api-'));
   const database = join(folder, 'studio.sqlite');
@@ -141,8 +180,20 @@ test('studio API persists private data and validates event and client workflows'
     await server.stop();
     server = await start();
     assert.equal((await request('GET', '/studio', 200, undefined, token)).data.photoGalleries[0].id, gallery.id);
+    const updatedGallery = await request('PATCH', '/photo-galleries/' + gallery.id, 200,
+      { ...galleryInput, driveLink: 'https://drive.google.com/drive/folders/updated' }, token);
+    assert.equal(updatedGallery.createdAt, gallery.createdAt);
+    assert.match(updatedGallery.driveLink, /updated$/);
+    await request('DELETE', '/photo-galleries/' + gallery.id, 204, undefined, token);
+    assert.deepEqual((await request('GET', '/studio', 200, undefined, token)).data.photoGalleries, []);
     assert.equal((await request('GET', '/settings', 200, undefined, token)).theme, 'forest');
     assert.equal((await request('GET', '/events/' + event.id, 200, undefined, token)).title, 'Updated title');
+    await request('PATCH', '/events/' + event.id + '/inactive', 204, undefined, token);
+    await request('PATCH', '/clients/' + event.clientId + '/inactive', 204, undefined, token);
+    const inactiveEvent = await request('GET', '/events/' + event.id, 200, undefined, token);
+    assert.equal(inactiveEvent.inactive, true);
+    assert.ok(inactiveEvent.payments.length);
+    assert.equal((await request('GET', '/clients/' + event.clientId, 200, undefined, token)).client.inactive, true);
     await request('DELETE', '/events/' + event.id, 204, undefined, token);
     const relinked = await request('PATCH', '/events/' + sameClient.id, 200,
       { contact: { name: 'New contact', phone: '+91 98765 43211' } }, token);

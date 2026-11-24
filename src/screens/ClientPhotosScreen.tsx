@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import Feather from '@expo/vector-icons/Feather';
@@ -29,15 +30,16 @@ export function ClientGalleryScreen({ favourites = false }: { favourites?: boole
   const [error, setError] = useState('');
   const [retry, setRetry] = useState(0);
   const [galleryCache] = useState(() => new Map<string, CachedGallery>());
+  const galleryLinks = useRef(new Map<string, string>());
   const title = favourites ? 'Favourites' : 'Photos';
 
   useEffect(() => {
     if (galleryChange) galleryCache.delete(galleryChange.id);
   }, [galleryCache, galleryChange]);
 
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     let active = true;
-    setLoading(true);
+    if (!galleryLinks.current.size) setLoading(true);
     setError('');
     if (!loadClientGalleries) {
       setLoading(false);
@@ -46,9 +48,11 @@ export function ClientGalleryScreen({ favourites = false }: { favourites?: boole
     }
     void loadClientGalleries().then(result => {
       if (!active) return;
+      const links = new Map(result.galleries.map(gallery => [gallery.id, gallery.driveLink]));
       for (const id of galleryCache.keys()) {
-        if (!result.galleries.some(gallery => gallery.id === id)) galleryCache.delete(id);
+        if (!links.has(id) || links.get(id) !== galleryLinks.current.get(id)) galleryCache.delete(id);
       }
+      galleryLinks.current = links;
       setList(result);
       setSelectedId(previous => result.galleries.some(gallery => gallery.id === previous) ? previous
         : result.galleries.length === 1 ? result.galleries[0].id : null);
@@ -56,14 +60,14 @@ export function ClientGalleryScreen({ favourites = false }: { favourites?: boole
       if (active) { galleryCache.clear(); setList(null); setSelectedId(null); setError('Your galleries could not be loaded. Please try again.'); }
     }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [galleryCache, loadClientGalleries, retry]);
+  }, [galleryCache, loadClientGalleries, retry]));
 
   const selected = !loading && list?.galleries.find(gallery => gallery.id === selectedId);
-  if (selected && list) return <GalleryPreview key={selected.id} gallery={selected}
+  if (selected && list) return <GalleryPreview key={JSON.stringify([selected.id, selected.driveLink, retry])} gallery={selected}
     cache={galleryCache} favourites={favourites} previewsEnabled={list.previewsEnabled} onBack={() => setSelectedId(null)}
-    onRefresh={() => { galleryCache.delete(selected.id); setRetry(value => value + 1); }} />;
+    onRefresh={() => { galleryCache.delete(selected.id); setLoading(true); setRetry(value => value + 1); }} />;
 
-  return <Screen refreshing={loading && list !== null} onRefresh={() => { galleryCache.clear(); setRetry(value => value + 1); }}>
+  return <Screen refreshing={loading && list !== null} onRefresh={() => { galleryCache.clear(); setLoading(true); setRetry(value => value + 1); }}>
     <Header title={title} />
     {loading ? <ActivityIndicator color={colors.primary} accessibilityLabel="Loading your galleries" />
       : error ? <View style={ui.gap}><ErrorMessage message={error} /><Button title="Retry" variant="secondary" onPress={() => setRetry(value => value + 1)} /></View>
@@ -86,8 +90,8 @@ function GalleryPreview({ gallery, favourites, previewsEnabled, onBack, onRefres
   const [error, setError] = useState('');
   const [linkError, setLinkError] = useState('');
   const [likeError, setLikeError] = useState('');
-  const [savingPhoto, setSavingPhoto] = useState<string>();
-  const likePending = useRef(false);
+  const [optimisticLikes, setOptimisticLikes] = useState<Record<string, boolean>>({});
+  const likePending = useRef(new Set<string>());
   const failedTarget = useRef(drivePhotoPageSize);
   const [viewer, setViewer] = useState<{ photos: DrivePhoto[]; startIndex: number }>();
   const [total, setTotal] = useState<number>();
@@ -114,6 +118,12 @@ function GalleryPreview({ gallery, favourites, previewsEnabled, onBack, onRefres
 
   useEffect(() => {
     if (!cached) return;
+    const available = new Set(cached.photos.map(photo => photo.id));
+    setOptimisticLikes(current => {
+      const entries = Object.entries(current);
+      const remaining = entries.filter(([id]) => available.has(id) || likePending.current.has(id));
+      return remaining.length === entries.length ? current : Object.fromEntries(remaining);
+    });
     setViewer(current => {
       if (!current) return current;
       const known = new Set(current.photos.map(photo => photo.id));
@@ -180,17 +190,18 @@ function GalleryPreview({ gallery, favourites, previewsEnabled, onBack, onRefres
   }
 
   async function toggleLike(photoId: string) {
-    if (likePending.current || !setGalleryFavourite) return;
-    likePending.current = true;
+    if (likePending.current.has(photoId) || !setGalleryFavourite) return;
+    const next = !(optimisticLikes[photoId] ?? favourites);
+    likePending.current.add(photoId);
     setLikeError('');
-    setSavingPhoto(photoId);
+    setOptimisticLikes(current => ({ ...current, [photoId]: next }));
     try {
-      await setGalleryFavourite(gallery.id, photoId, !favourites);
+      await setGalleryFavourite(gallery.id, photoId, next);
     } catch (cause) {
+      setOptimisticLikes(current => ({ ...current, [photoId]: !next }));
       setLikeError(cause instanceof Error ? cause.message : 'Could not update this favourite.');
     } finally {
-      likePending.current = false;
-      setSavingPhoto(undefined);
+      likePending.current.delete(photoId);
     }
   }
 
@@ -220,20 +231,12 @@ function GalleryPreview({ gallery, favourites, previewsEnabled, onBack, onRefres
           onPress={() => setViewer({ photos, startIndex: index })}>
           <PhotoTile galleryId={gallery.id} photo={photo} />
         </Pressable>
-        <View pointerEvents="box-none" style={styles.tileActions}>
-          <Pressable accessibilityRole="button" accessibilityLabel={`Preview photo ${index + 1}`}
-            style={({ pressed }) => [styles.previewButton, pressed && styles.pressed]}
-            onPress={() => setViewer({ photos, startIndex: index })}>
-            <Feather name="maximize-2" size={14} color="#FFFFFF" />
-            <Text numberOfLines={1} style={styles.previewLabel}>Preview</Text>
-          </Pressable>
-          {setGalleryFavourite && <Pressable accessibilityRole="button"
-            accessibilityLabel={`${favourites ? 'Remove from favourites' : 'Like'} photo ${index + 1}`}
-            accessibilityState={{ selected: favourites, busy: savingPhoto === photo.id, disabled: !!savingPhoto }}
-            disabled={!!savingPhoto} style={styles.likeButton} onPress={() => void toggleLike(photo.id)}>
-            {savingPhoto === photo.id ? <ActivityIndicator size="small" color="#A8EEE0" /> : <HeartIcon size={19} filled={favourites} />}
-          </Pressable>}
-        </View>
+        {setGalleryFavourite && <Pressable accessibilityRole="button"
+          accessibilityLabel={`${favourites ? 'Remove from favourites' : 'Like'} photo ${index + 1}`}
+          accessibilityState={{ selected: optimisticLikes[photo.id] ?? favourites, busy: likePending.current.has(photo.id) }}
+          style={styles.likeButton} onPress={() => void toggleLike(photo.id)}>
+          <HeartIcon size={19} filled={optimisticLikes[photo.id] ?? favourites} />
+        </Pressable>}
       </View>)}
     </View>
     {loading ? <ActivityIndicator color={colors.primary} accessibilityLabel="Loading Drive photos" />
@@ -264,10 +267,6 @@ const styles = StyleSheet.create({
   openPhoto: { flex: 1 },
   pressed: { opacity: 0.8 },
   preview: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  tileActions: { position: 'absolute', left: 6, right: 6, bottom: 6, flexDirection: 'row', alignItems: 'center', gap: 4 },
-  previewButton: { flex: 1, minHeight: 44, flexDirection: 'row', alignItems: 'center',
-    justifyContent: 'center', gap: 5, borderRadius: 22, backgroundColor: '#10171BE6', borderColor: '#FFFFFF50', borderWidth: 1 },
-  previewLabel: { color: '#FFFFFF', fontSize: 13, fontWeight: '700', flexShrink: 1 },
-  likeButton: { width: 44, height: 44, borderRadius: 22,
+  likeButton: { position: 'absolute', right: 6, bottom: 6, width: 44, height: 44, borderRadius: 22,
     alignItems: 'center', justifyContent: 'center', backgroundColor: '#10171BCF', borderColor: '#FFFFFF50', borderWidth: 1 },
 });

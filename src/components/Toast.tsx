@@ -27,7 +27,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 
   const showToast = useCallback((message: string, options?: ToastOptions) => {
     setToast({ message });
-    if (options?.sound) {
+    if (options?.sound !== false) {
       // Playback failure should never hide a successful save confirmation.
       void player.seekTo(0).then(() => player.play()).catch(() => {});
     }

@@ -72,10 +72,13 @@ export function removeClient(data: StudioData, id: string): StudioData {
 export function addPhotoGallery(data: StudioData, gallery: PhotoGallery): StudioData {
   if (!data.clients.some(client => client.id === gallery.clientId)) throw new Error('Choose an existing client.');
   if (!isGoogleDriveLink(gallery.driveLink)) throw new Error('Enter a valid Google Drive link.');
-  return { ...data, photoGalleries: [...(data.photoGalleries ?? []), gallery] };
+  const galleries = data.photoGalleries ?? [];
+  return { ...data, photoGalleries: galleries.some(item => item.id === gallery.id)
+    ? galleries.map(item => item.id === gallery.id ? gallery : item) : [...galleries, gallery] };
 }
 export function putEvent(data: StudioData, input: EventInput, id: string, createdAt: string): StudioData {
   validateEvent(input, data.clients);
-  const event: StudioEvent = { ...input, id, createdAt };
+  const prior = data.events.find(event => event.id === id);
+  const event: StudioEvent = { ...input, id, createdAt, ...(prior?.inactive ? { inactive: true } : {}) };
   return { ...data, events: data.events.some(e => e.id === id) ? data.events.map(e => e.id === id ? event : e) : [...data.events, event] };
 }

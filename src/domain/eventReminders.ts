@@ -5,7 +5,7 @@ const hourMs = 60 * 60 * 1000;
 
 export function planEventReminders(events: StudioEvent[], now = Date.now()) {
   return events.flatMap(event => {
-    if (event.status !== 'Scheduled') return [];
+    if (event.inactive || event.status !== 'Scheduled') return [];
     const startsAt = new Date(event.date);
     return offsets.flatMap(hours => {
       const at = startsAt.getTime() - hours * hourMs;

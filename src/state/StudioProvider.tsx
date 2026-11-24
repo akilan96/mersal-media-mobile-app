@@ -3,7 +3,7 @@ import { defaultEventTypes, type ThemeName } from '../domain/types';
 import { AppState } from 'react-native';
 import * as Crypto from 'expo-crypto';
 import type { AccountRole, ClientGalleryList, ClientInput, ClientPaymentSummary, DrivePhotoPage, EventInput, EventStatus, ManagedAccount, Profile, StudioData, StudioEvent } from '../domain/types';
-import { addPhotoGallery, isClientPhone, phoneDigits, putEvent, removeClient, validateClient, validateProfile } from '../domain/validation';
+import { addPhotoGallery, isClientPhone, phoneDigits, putEvent, validateClient, validateProfile } from '../domain/validation';
 import { emptyStudio, studioRepository } from '../services/repository';
 import { createCredential, hasCredential, removeCredential, verifyPin } from '../services/credentials';
 import { cloudApiUrl } from '../services/cloudApi';
@@ -36,7 +36,8 @@ export interface StudioContext {
   setTheme(theme: ThemeName): Promise<void>;
   setHomePhoto(uri?: string): Promise<void>;
   addEventType(name: string): Promise<void>;
-  savePhotoGallery(clientId: string, driveLink: string): Promise<void>;
+  savePhotoGallery(clientId: string, driveLink: string, id?: string): Promise<void>;
+  removePhotoGallery(id: string): Promise<void>;
 }
 const Context = createContext<StudioContext | null>(null);
 function LocalStudioProvider({ children }: { children: React.ReactNode }) {
@@ -111,9 +112,16 @@ function LocalStudioProvider({ children }: { children: React.ReactNode }) {
     },
     async setTheme(theme) { await commit(previous => ({ ...previous, theme })); },
     async setHomePhoto(homePhoto) { await commit(previous => ({ ...previous, homePhoto })); },
-    async savePhotoGallery(clientId, driveLink) {
-      const gallery = { id: Crypto.randomUUID(), clientId, driveLink: driveLink.trim(), createdAt: new Date().toISOString() };
-      await commit(previous => addPhotoGallery(previous, gallery));
+    async savePhotoGallery(clientId, driveLink, id) {
+      const galleryId = id ?? Crypto.randomUUID();
+      await commit(previous => {
+        const prior = previous.photoGalleries?.find(gallery => gallery.id === galleryId);
+        if (id && !prior) throw new Error('Gallery not found.');
+        return addPhotoGallery(previous, { id: galleryId, clientId, driveLink: driveLink.trim(), createdAt: prior?.createdAt ?? new Date().toISOString() });
+      });
+    },
+    async removePhotoGallery(id) {
+      await commit(previous => ({ ...previous, photoGalleries: (previous.photoGalleries ?? []).filter(gallery => gallery.id !== id) }));
     },
     async addEventType(name) {
       const clean = name.trim();
@@ -169,18 +177,18 @@ function LocalStudioProvider({ children }: { children: React.ReactNode }) {
         return putEvent(previous, { ...event, status }, event.id, event.createdAt);
       });
     },
-    async deleteEvent(id) { await commit(previous => ({ ...previous, events: previous.events.filter(e => e.id !== id) })); },
+    async deleteEvent(id) { await commit(previous => ({ ...previous, events: previous.events.map(event => event.id === id ? { ...event, inactive: true } : event) })); },
     async saveClient(input, id) {
       const clientId = id ?? Crypto.randomUUID();
       const clean = { ...input, name: input.name.trim(), phone: input.phone.trim(), email: input.email.trim() }; validateClient(clean);
       await commit(previous => {
         const existing = previous.clients.find(c => c.id === clientId);
         if (id && !existing) throw new Error('This client no longer exists.');
-        const client = { ...clean, id: clientId, createdAt: existing?.createdAt ?? new Date().toISOString() };
+        const client = { ...existing, ...clean, id: clientId, createdAt: existing?.createdAt ?? new Date().toISOString() };
         return { ...previous, clients: existing ? previous.clients.map(c => c.id === clientId ? client : c) : [...previous.clients, client] };
       }); return clientId;
     },
-    async deleteClient(id) { await commit(previous => removeClient(previous, id)); },
+    async deleteClient(id) { await commit(previous => ({ ...previous, clients: previous.clients.map(client => client.id === id ? { ...client, inactive: true } : client) })); },
   };
   return <Context.Provider value={value}>{children}</Context.Provider>;
 }

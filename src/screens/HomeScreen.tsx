@@ -15,6 +15,7 @@ const sampleNotices = [
   { title: 'Welcome to Mersal Media', message: 'Sample notification · Your studio dashboard is ready.' },
   { title: 'Shoot reminder', message: 'Sample notification · Review your upcoming shoots before heading out.' },
 ];
+const reminderKey = (event: StudioEvent) => `@mersal/reminder-viewed/${event.id}/${event.date}`;
 export default function HomeScreen() {
   const { colors, ui } = useStudioTheme();
   const styles = makeStyles(colors);
@@ -26,6 +27,7 @@ export default function HomeScreen() {
   const [now, setNow] = useState(new Date());
   const [remindersOpen, setRemindersOpen] = useState(false);
   const [showSamples, setShowSamples] = useState(false);
+  const [viewedReminders, setViewedReminders] = useState<Set<string>>(() => new Set());
   React.useEffect(() => {
     let active = true;
     AsyncStorage.getItem(sampleNoticeKey).then(viewed => {
@@ -33,13 +35,31 @@ export default function HomeScreen() {
     }).catch(() => {});
     return () => { active = false; };
   }, []);
+  React.useEffect(() => {
+    let active = true;
+    const keys = data.events.map(reminderKey);
+    if (keys.length) {
+      void AsyncStorage.multiGet(keys).then(entries => {
+        if (active) setViewedReminders(current => new Set([...current, ...entries.filter(([, value]) => value !== null).map(([key]) => key)]));
+      }).catch(() => {});
+    }
+    return () => { active = false; };
+  }, [data.events]);
   useFocusEffect(useCallback(() => {
     setNow(new Date());
     const timer = setInterval(() => setNow(new Date()), 30000);
     return () => clearInterval(timer);
   }, []));
   const upcoming = upcomingEvents(data.events, now);
-  const noticeCount = upcoming.length + (showSamples ? sampleNotices.length : 0);
+  const unreadReminders = upcoming.filter(event => !viewedReminders.has(reminderKey(event)));
+  const noticeCount = unreadReminders.length + (showSamples ? sampleNotices.length : 0);
+  function viewReminder(event: StudioEvent) {
+    const key = reminderKey(event);
+    setViewedReminders(current => new Set(current).add(key));
+    void AsyncStorage.setItem(key, 'true').catch(() => {});
+    closeReminders();
+    openEvent(event.id);
+  }
   function closeReminders() {
     setRemindersOpen(false);
     if (showSamples) {
@@ -49,10 +69,10 @@ export default function HomeScreen() {
   }
   const openEvent = (eventId: string) => navigation.navigate('EventDetails', { eventId });
   const metrics = [
-    { label: 'Total Shoots', filter: 'total' as const, value: data.events.filter(e => e.status !== 'Cancelled').length, icon: 'calendar' as const, caption: 'All Time', tone: 'mint' as const },
+    { label: 'Total Shoots', filter: 'total' as const, value: data.events.filter(e => !e.inactive && e.status !== 'Cancelled').length, icon: 'calendar' as const, caption: 'All Time', tone: 'mint' as const },
     { label: 'Upcoming', filter: 'upcoming' as const, value: upcoming.length, icon: 'clock' as const, caption: 'Scheduled', tone: 'blue' as const },
-    { label: 'Completed', filter: 'completed' as const, value: data.events.filter(e => e.status === 'Completed').length, icon: 'check-circle' as const, caption: 'Delivered', tone: 'gold' as const },
-    { label: 'Pending Edits', filter: 'editing' as const, value: data.events.filter(e => e.status === 'Editing').length, icon: 'edit' as const, caption: 'In Studio', tone: 'teal' as const },
+    { label: 'Completed', filter: 'completed' as const, value: data.events.filter(e => !e.inactive && e.status === 'Completed').length, icon: 'check-circle' as const, caption: 'Delivered', tone: 'gold' as const },
+    { label: 'Pending Edits', filter: 'editing' as const, value: data.events.filter(e => !e.inactive && e.status === 'Editing').length, icon: 'edit' as const, caption: 'In Studio', tone: 'teal' as const },
   ];
   return <Screen onRefresh={() => setNow(new Date())} refreshing={false}>
     <Header right={
@@ -77,11 +97,8 @@ export default function HomeScreen() {
             </View>
           </Card>
         ))}
-        {upcoming.map(event => (
-          <UpcomingCard key={event.id} event={event} onPress={() => {
-            closeReminders();
-            openEvent(event.id);
-          }} />
+        {unreadReminders.map(event => (
+          <UpcomingCard key={event.id} event={event} onPress={() => viewReminder(event)} />
         ))}
         {noticeCount === 0 && <EmptyState icon="bell" title="No reminders yet" description="Scheduled shoots will appear here as reminders." />}
       </Screen>

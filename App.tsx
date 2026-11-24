@@ -1,5 +1,6 @@
 import { useFonts } from 'expo-font';
 import { Image } from 'expo-image';
+import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { Inter_400Regular } from '@expo-google-fonts/inter/400Regular';
 import { Inter_500Medium } from '@expo-google-fonts/inter/500Medium';
 import { Inter_600SemiBold } from '@expo-google-fonts/inter/600SemiBold';
@@ -51,12 +52,24 @@ const studioFonts = {
 };
 
 function SignInSplash() {
+  const sound = useAudioPlayer(require('./assets/audio/sign-in-splash.mp3'));
+  const { isLoaded } = useAudioPlayerStatus(sound);
+  const [gifVisible, setGifVisible] = React.useState(false);
+  const started = React.useRef(false);
+
+  React.useEffect(() => {
+    if (!gifVisible || !isLoaded || started.current) return;
+    started.current = true;
+    sound.play();
+  }, [gifVisible, isLoaded, sound]);
+
   return <View style={splashStyles.screen}>
     <StatusBar style="light" />
     <Image
       source={require('./assets/design/splash-animation.gif')}
       style={splashStyles.animation}
       contentFit="contain"
+      onDisplay={() => setGifVisible(true)}
       accessibilityLabel="Mersal Media loading"
     />
   </View>;

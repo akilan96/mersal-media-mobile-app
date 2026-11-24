@@ -1,12 +1,15 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, Modal, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Animated, Easing, Modal, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import Feather from '@expo/vector-icons/Feather';
 import Svg, { Path } from 'react-native-svg';
+import { StatusBar } from 'expo-status-bar';
+import { useAudioPlayer } from 'expo-audio';
 import type { DrivePhoto } from '../domain/types';
 import { useStudio } from '../state/StudioProvider';
 import { ErrorMessage } from '../components/ui';
+import { useStudioTheme } from '../theme';
 
 type ViewerProps = {
   galleryId: string; photos: DrivePhoto[]; startIndex: number; favourites: boolean;
@@ -16,9 +19,18 @@ type ViewerProps = {
 };
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+const heartParticles = [
+  [-0.39, -0.38], [-0.24, -0.29], [-0.07, -0.45], [0.12, -0.33], [0.31, -0.43], [0.42, -0.24],
+  [-0.41, -0.07], [-0.20, -0.13], [0.22, -0.09], [0.40, 0.02],
+  [-0.38, 0.20], [-0.19, 0.11], [0.16, 0.14], [0.33, 0.23],
+  [-0.31, 0.40], [-0.08, 0.33], [0.12, 0.41], [0.40, 0.43],
+];
+const heartReds = ['#E11D48', '#BE123C', '#FDA4AF', '#FB5274'];
 
 export function ClientPhotoViewer({ galleryId, photos, startIndex, favourites, total, hasMore, loading, pageError, onLoadMore, onClose }: ViewerProps) {
   const { setGalleryFavourite } = useStudio();
+  const { colors, dark } = useStudioTheme();
+  const likeSound = useAudioPlayer(require('../../assets/audio/like-pop.wav'));
   const [index, setIndex] = useState(startIndex);
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [pending, setPending] = useState<string>();
@@ -143,11 +155,10 @@ export function ClientPhotoViewer({ galleryId, photos, startIndex, favourites, t
     setHeartPhoto(id);
     heart.stopAnimation();
     heart.setValue(0);
-    Animated.sequence([
-      Animated.spring(heart, { toValue: 1, speed: 26, bounciness: 12, useNativeDriver: true }),
-      Animated.delay(300),
-      Animated.timing(heart, { toValue: 0, duration: 180, useNativeDriver: true }),
-    ]).start();
+    Animated.timing(heart, { toValue: 1, duration: 890, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start(({ finished }) => {
+      if (finished) setHeartPhoto(current => current === id ? undefined : current);
+    });
+    void likeSound.seekTo(0).then(() => likeSound.play()).catch(() => {});
   }
 
   async function updateFavourite(item: DrivePhoto, addOnly = false) {
@@ -169,6 +180,7 @@ export function ClientPhotoViewer({ galleryId, photos, startIndex, favourites, t
       setSelected(value => ({ ...value, [item.id]: previous }));
       heart.stopAnimation();
       heart.setValue(0);
+      setHeartPhoto(undefined);
       setError(cause instanceof Error ? cause.message : 'Could not update this favourite.');
     } finally {
       inFlight.current = false;
@@ -177,64 +189,90 @@ export function ClientPhotoViewer({ galleryId, photos, startIndex, favourites, t
   }
 
   return <Modal animationType="fade" onRequestClose={onClose}>
-    <SafeAreaView style={styles.viewer}>
-      <View style={styles.bar}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Close photo" style={styles.button} onPress={onClose}>
-          <Feather name="arrow-left" color="#F3F8FA" size={23} />
-        </Pressable>
-        <View style={styles.galleryIcon}><Feather name="camera" color="#A8EEE0" size={17} /></View>
-        <Text numberOfLines={1} style={styles.title}>{favourites ? 'Favourites' : 'Photos'}</Text>
+    <SafeAreaView style={[styles.viewer, { backgroundColor: colors.background }]}>
+      <StatusBar style={dark ? 'light' : 'dark'} />
+      <View style={styles.header}>
+        <View style={styles.bar}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Close photo"
+            style={[styles.backButton, { backgroundColor: colors.mint }]} onPress={onClose}>
+            <Feather name="arrow-left" color={colors.primaryDark} size={22} />
+          </Pressable>
+          <View style={styles.headerText}>
+            <Text accessibilityRole="header" style={[styles.title, { color: colors.text }]}>{favourites ? 'Favourites' : 'Photos'}</Text>
+            <View style={styles.subtitle}>
+              <Text style={[styles.subtitleText, { color: colors.muted }]}>{favourites ? 'Selected photos' : 'All photos'}</Text>
+            </View>
+          </View>
+          <View style={[styles.position, { backgroundColor: colors.mint, borderColor: colors.border }]} accessible
+            accessibilityLabel={displayedTotal === undefined ? `Photo ${index + 1}` : `Photo ${index + 1} of ${displayedTotal}`}
+            accessibilityActions={[
+              ...(index > 0 ? [{ name: 'decrement', label: 'Previous photo' }] : []),
+              ...(!atEnd || hasMore ? [{ name: 'increment', label: 'Next photo' }] : []),
+            ]}
+            onAccessibilityAction={({ nativeEvent }) => stepRef.current(nativeEvent.actionName === 'increment' ? 1 : -1)}>
+            <Feather name="image" color={colors.primaryDark} size={15} />
+            <Text style={[styles.positionText, { color: colors.primaryDark }]}>{displayedTotal === undefined ? `Photo ${index + 1}` : `${index + 1} / ${displayedTotal}`}</Text>
+          </View>
+        </View>
       </View>
-      <View style={styles.pager} {...photoGestures.panHandlers} onLayout={event => {
+      <View style={[styles.pager, { backgroundColor: colors.input, borderColor: colors.border }]} {...photoGestures.panHandlers} onLayout={event => {
         viewport.current = event.nativeEvent.layout;
       }}>
         <Animated.View style={[StyleSheet.absoluteFill, { transform: [{ translateX: slideX }, { translateY: slideY }] }]}>
           <PhotoPage key={photo.id} galleryId={galleryId} photo={photo} onDoubleTap={() => void updateFavourite(photo, true)}
-            zoom={{ zoomScale, zoomX, zoomY }} heart={heartPhoto === photo.id ? heart : undefined} />
+            zoom={{ zoomScale, zoomX, zoomY }}
+            burst={heartPhoto === photo.id ? { progress: heart, ...viewport.current } : undefined} />
         </Animated.View>
-        <View pointerEvents="none" style={styles.position} accessible
-          accessibilityLabel={displayedTotal === undefined ? `Photo ${index + 1}` : `Photo ${index + 1} of ${displayedTotal}`}>
-          <Text style={styles.positionText}>{displayedTotal === undefined ? `Photo ${index + 1}` : `${index + 1} / ${displayedTotal}`}</Text>
-        </View>
-        {!!(error || pageError) && <View style={styles.error}><ErrorMessage message={error || pageError} /></View>}
+        {!!(error || pageError) && <View style={styles.error}>
+          <ErrorMessage message={error || pageError} />
+          {!!pageError && !loading && <Pressable accessibilityRole="button" style={[styles.retry, { backgroundColor: colors.card }]} onPress={onLoadMore}>
+            <Text style={[styles.retryText, { color: colors.primaryDark }]}>Retry loading photos</Text>
+          </Pressable>}
+        </View>}
+        {atEnd && loading && <ActivityIndicator style={styles.pageLoading} color={colors.primary} accessibilityLabel="Loading more photos" />}
       </View>
-      <View style={styles.toolbar}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Previous photo" disabled={index === 0}
-          style={[styles.button, index === 0 && styles.disabled]} onPress={() => stepRef.current(-1)}>
-          <Feather name="arrow-left" color="#F3F8FA" size={21} />
-        </Pressable>
+      <View style={styles.footer}>
         <Pressable accessibilityRole="button" accessibilityLabel={saved ? 'Remove from favourites' : 'Add to favourites'}
           accessibilityState={{ selected: saved, busy: pending === photo.id, disabled: !!pending }}
-          disabled={!!pending} style={[styles.favouriteButton, saved && styles.favouriteSaved]} onPress={() => void updateFavourite(photo)}>
-          <HeartIcon size={21} filled={saved} />
-          <Text style={[styles.favouriteLabel, saved && styles.selected]}>{saved ? 'Favourited' : 'Favourite'}</Text>
-        </Pressable>
-        <Pressable accessibilityRole="button" accessibilityLabel="Next photo"
-          disabled={atEnd && (!hasMore || loading)} style={[styles.button, atEnd && !hasMore && !loading && styles.disabled]}
-          onPress={() => stepRef.current(1)}>
-          {atEnd && loading ? <ActivityIndicator color="#A8EEE0" /> : <Feather name="arrow-right" color="#F3F8FA" size={21} />}
+          disabled={!!pending} style={({ pressed }) => [styles.favouriteButton,
+            { backgroundColor: saved ? colors.errorBg : colors.card, borderColor: saved ? colors.error : colors.border }, pressed && styles.pressed]}
+          onPress={() => void updateFavourite(photo)}>
+          <HeartIcon size={25} filled={saved} color={colors.error} />
         </Pressable>
       </View>
     </SafeAreaView>
   </Modal>;
 }
 
-function PhotoPage({ galleryId, photo, heart, zoom, onDoubleTap }: {
+type Burst = { progress: Animated.Value; width: number; height: number };
+
+function PhotoPage({ galleryId, photo, burst, zoom, onDoubleTap }: {
   galleryId: string; photo: DrivePhoto;
-  heart?: Animated.Value; onDoubleTap: () => void;
+  burst?: Burst; onDoubleTap: () => void;
   zoom?: { zoomScale: Animated.Value; zoomX: Animated.Value; zoomY: Animated.Value };
 }) {
   const { galleryThumbnail } = useStudio();
+  const { colors } = useStudioTheme();
   const small = galleryThumbnail?.(galleryId, photo.id, false, photo.name);
   const large = galleryThumbnail?.(galleryId, photo.id, true, photo.name);
   const [smallStatus, setSmallStatus] = useState<'loading' | 'loaded' | 'failed'>('loading');
   const [largeStatus, setLargeStatus] = useState<'loading' | 'loaded' | 'failed'>('loading');
   const [loadLarge, setLoadLarge] = useState(false);
+  const [showDetailLoader, setShowDetailLoader] = useState(false);
+  const [landscape, setLandscape] = useState(false);
   const lastTap = useRef(0);
+  const loadingDetail = !!large && smallStatus === 'loaded' && largeStatus === 'loading';
+  const loadingInitial = !!small && largeStatus !== 'loaded' && (smallStatus === 'loading' || largeStatus === 'loading');
 
   useEffect(() => {
     if (smallStatus !== 'loading') setLoadLarge(true);
   }, [smallStatus]);
+
+  useEffect(() => {
+    if (!loadingDetail) return;
+    const delay = setTimeout(() => setShowDetailLoader(true), 250);
+    return () => clearTimeout(delay);
+  }, [loadingDetail]);
 
   return <Pressable accessible={false} style={styles.photo} onPress={() => {
     const now = Date.now();
@@ -246,27 +284,61 @@ function PhotoPage({ galleryId, photo, heart, zoom, onDoubleTap }: {
     <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, zoom && {
       transform: [{ translateX: zoom.zoomX }, { translateY: zoom.zoomY }, { scale: zoom.zoomScale }],
     }]}>
-      {small && smallStatus !== 'failed' && <Image source={small} cachePolicy="memory-disk" contentFit="contain"
+      {small && smallStatus !== 'failed' && <Image source={small} cachePolicy="memory-disk" contentFit={landscape ? 'contain' : 'cover'}
         style={StyleSheet.absoluteFill} priority="high"
-        onLoad={() => setSmallStatus('loaded')} onError={() => setSmallStatus('failed')} />}
-      {loadLarge && large && largeStatus !== 'failed' && <Image source={large} cachePolicy="disk" contentFit="contain"
+        onLoad={({ source }) => { setLandscape(source.width > source.height); setSmallStatus('loaded'); }}
+        onError={() => setSmallStatus('failed')} />}
+      {loadLarge && large && largeStatus !== 'failed' && <Image source={large} cachePolicy="disk" contentFit={landscape ? 'contain' : 'cover'}
         style={StyleSheet.absoluteFill} transition={150}
-        onLoad={() => setLargeStatus('loaded')} onError={() => setLargeStatus('failed')} />}
+        onLoad={({ source }) => { setLandscape(source.width > source.height); setLargeStatus('loaded'); }}
+        onError={() => setLargeStatus('failed')} />}
     </Animated.View>
     {smallStatus !== 'loaded' && largeStatus !== 'loaded' && (
       !small || (smallStatus === 'failed' && largeStatus === 'failed')
-        ? <Text style={styles.title}>Preview unavailable</Text>
-        : <ActivityIndicator color="white" accessibilityLabel="Loading photo" />
+        ? <Text style={[styles.subtitleText, { color: colors.muted }]}>Preview unavailable</Text>
+        : null
     )}
-    {heart && <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.heartOverlay, {
-      opacity: heart.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, 1, 1], extrapolate: 'clamp' }),
-      transform: [{ scale: heart }],
-    }]}><HeartIcon size={105} filled /></Animated.View>}
+    {(smallStatus === 'loaded' ? loadingDetail && showDetailLoader : loadingInitial) && (
+      <View pointerEvents="none" accessibilityLiveRegion="polite" style={[
+        styles.photoLoader,
+        { backgroundColor: colors.card, borderColor: colors.border },
+        smallStatus === 'loaded' && styles.detailLoader,
+      ]}>
+        <View style={[styles.loaderIcon, { backgroundColor: colors.mint }]}>
+          <ActivityIndicator size="small" color={colors.primary} />
+        </View>
+        <Text style={[styles.loaderText, { color: colors.text }]}>
+          {smallStatus === 'loaded' ? 'Loading HD image' : 'Loading photo'}
+        </Text>
+      </View>
+    )}
+    {burst && <HeartBurst {...burst} />}
   </Pressable>;
 }
 
-export function HeartIcon({ size, filled }: { size: number; filled: boolean }) {
-  const color = filled ? '#FF527A' : '#A8EEE0';
+function HeartBurst({ progress, width, height }: Burst) {
+  const opacity = progress.interpolate({ inputRange: [0, 0.13, 0.72, 1], outputRange: [0, 1, 1, 0], extrapolate: 'clamp' });
+  return <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.heartOverlay, { opacity }]}>
+    {heartParticles.map(([x, y], index) => (
+      <Animated.View key={index} style={{
+        position: 'absolute',
+        transform: [
+          { translateX: progress.interpolate({ inputRange: [0, 1], outputRange: [0, width * x] }) },
+          { translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [0, height * y] }) },
+          { rotate: `${x * 70}deg` },
+          { scale: progress.interpolate({ inputRange: [0, 0.27, 1], outputRange: [0.25, 1.16, 0.85] }) },
+        ],
+      }}>
+        <HeartIcon size={17 + (index % 5) * 6} filled color={heartReds[index % heartReds.length]} />
+      </Animated.View>
+    ))}
+    <Animated.View style={{ transform: [{
+      scale: progress.interpolate({ inputRange: [0, 0.31, 0.66, 1], outputRange: [0.35, 1.15, 0.95, 0.7] }),
+    }] }}><HeartIcon size={82} filled color="#E11D48" /></Animated.View>
+  </Animated.View>;
+}
+
+export function HeartIcon({ size, filled, color = filled ? '#FB5274' : '#FDA4AF' }: { size: number; filled: boolean; color?: string }) {
   return <Svg width={size} height={size} viewBox="0 0 24 24" accessible={false}>
     <Path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78Z"
       fill={filled ? color : 'none'} stroke={color} strokeWidth={1.75} strokeLinejoin="round" />
@@ -274,21 +346,28 @@ export function HeartIcon({ size, filled }: { size: number; filled: boolean }) {
 }
 
 const styles = StyleSheet.create({
-  viewer: { flex: 1, backgroundColor: '#10171B' },
-  bar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10, gap: 12 },
-  button: { width: 48, height: 48, borderRadius: 24, backgroundColor: '#1E2B31', alignItems: 'center', justifyContent: 'center' },
-  disabled: { opacity: 0.34 },
-  title: { flex: 1, color: '#F3F8FA', fontSize: 15, fontWeight: '600' },
-  galleryIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#1A302F', borderColor: '#38615D', borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-  position: { position: 'absolute', top: 14, right: 14, backgroundColor: '#080C0ED9', borderColor: '#FFFFFF35', borderWidth: 1, borderRadius: 18, paddingHorizontal: 12, paddingVertical: 6 },
-  positionText: { color: '#F3FFFC', fontWeight: '700', fontSize: 13, fontVariant: ['tabular-nums'] },
-  pager: { flex: 1, backgroundColor: '#080C0E', overflow: 'hidden' },
+  viewer: { flex: 1 },
+  header: { paddingBottom: 8 },
+  bar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 9, gap: 10 },
+  backButton: { width: 44, height: 44, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+  headerText: { flex: 1, gap: 2 },
+  title: { fontSize: 22, fontFamily: 'InterExtraBold', letterSpacing: -0.5 },
+  subtitle: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  subtitleText: { fontSize: 12, fontFamily: 'InterMedium' },
+  position: { flexDirection: 'row', alignItems: 'center', gap: 7, minHeight: 36, borderWidth: 1, borderRadius: 13, paddingHorizontal: 10 },
+  positionText: { fontFamily: 'InterBold', fontSize: 13, fontVariant: ['tabular-nums'] },
+  pager: { flex: 1, marginHorizontal: 10, borderRadius: 18, borderWidth: 1, overflow: 'hidden' },
   photo: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  toolbar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 18, paddingVertical: 14, gap: 12 },
-  favouriteButton: { flexDirection: 'row', minHeight: 48, paddingHorizontal: 18, gap: 8, borderRadius: 24, backgroundColor: '#1A302F', alignItems: 'center', justifyContent: 'center' },
-  favouriteSaved: { backgroundColor: '#38242F' },
-  favouriteLabel: { color: '#A8EEE0', fontSize: 14, fontWeight: '600' },
-  selected: { color: '#ff527a' },
+  photoLoader: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 14, borderWidth: 1, padding: 5, paddingRight: 12 },
+  detailLoader: { position: 'absolute', right: 10, bottom: 10 },
+  loaderIcon: { width: 29, height: 29, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
+  loaderText: { fontFamily: 'InterSemiBold', fontSize: 12 },
+  footer: { paddingTop: 9, paddingBottom: 6, alignItems: 'center' },
+  favouriteButton: { width: 53, height: 53, borderRadius: 18, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  pressed: { opacity: 0.85, transform: [{ scale: 0.96 }] },
   heartOverlay: { alignItems: 'center', justifyContent: 'center' },
   error: { position: 'absolute', top: 12, left: 12, right: 12 },
+  retry: { alignSelf: 'flex-start', marginTop: 8, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 10 },
+  retryText: { fontFamily: 'InterSemiBold' },
+  pageLoading: { position: 'absolute', top: 14, right: 14 },
 });

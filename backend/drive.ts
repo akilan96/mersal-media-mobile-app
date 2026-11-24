@@ -7,9 +7,11 @@ import { drivePhotoPageSize } from '../src/domain/types';
 const googleApi = 'https://www.googleapis.com/drive/v3/files';
 const driveScope = 'https://www.googleapis.com/auth/drive';
 const folderMime = 'application/vnd.google-apps.folder';
+const selectionFolderName = 'Client_Choosen';
+const selectionSourceKey = 'mersalSelectionSource';
 const idPattern = /^[a-zA-Z0-9_-]{1,256}$/;
 const photoMime = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif', 'image/heic', 'image/heif']);
-type DriveItem = { id: string; name: string; mimeType: string; parents?: string[]; thumbnailLink?: string; trashed?: boolean };
+type DriveItem = { id: string; name: string; mimeType: string; parents?: string[]; thumbnailLink?: string; trashed?: boolean; appProperties?: Record<string, string> };
 export type DriveTarget = { kind: 'folder' | 'file' | 'unknown'; id: string; resourceKey?: string };
 
 export function driveTarget(link: string): DriveTarget {
@@ -92,9 +94,11 @@ export function createDriveReader(env: Readonly<Record<string, string | undefine
     };
   }
 
-  async function driveRequest(url: string, target: DriveTarget, method = 'GET') {
+  async function driveRequest(url: string, target: DriveTarget, method = 'GET', body?: object) {
     try {
-      const response = await fetch(url, { method, headers: await headers(target), signal: AbortSignal.timeout(10000), redirect: 'error' });
+      const response = await fetch(url, { method, headers: {
+        ...await headers(target), ...(body ? { 'Content-Type': 'application/json' } : {}),
+      }, body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(10000), redirect: 'error' });
       if (response.status === 403) {
         const payload = await response.json().catch(() => null) as {
           error?: { errors?: { reason?: string }[]; details?: { reason?: string }[] };
@@ -110,11 +114,14 @@ export function createDriveReader(env: Readonly<Record<string, string | undefine
           throw new StoreError(403, 'The folder owner’s Google Workspace policy blocks this app’s access.');
         }
         if (reasons.some(reason => reason === 'insufficientPermissions' || reason === 'ACCESS_TOKEN_SCOPE_INSUFFICIENT')) {
-          throw new StoreError(503, 'The app’s Google credentials do not include Drive read access.');
+          throw new StoreError(503, method === 'GET'
+            ? 'The app’s Google credentials do not include Drive read access.'
+            : 'The studio’s Google credentials need Drive read and write access. Ask the studio to update the backend.');
         }
       }
       if (response.status === 403 || response.status === 404) {
-        if (method === 'PATCH') throw new StoreError(403, 'The studio’s Drive account needs permission to move photos between these folders.');
+        if (method === 'POST' || (body && 'name' in body)) throw new StoreError(403, 'Ask the gallery owner to create a Client_Choosen folder inside this Drive gallery.');
+        if (method === 'PATCH') throw new StoreError(403, 'Drive blocked the move. Ask the studio to check the service account’s access to the original photo, the gallery folder, and Client_Choosen.');
         throw new StoreError(403, 'Check the saved Drive link and share that exact folder with the studio’s service account as Viewer.');
       }
       if (!response.ok) throw new Error('Drive request failed');
@@ -128,16 +135,18 @@ export function createDriveReader(env: Readonly<Record<string, string | undefine
   const itemFields = 'id,name,mimeType,parents,thumbnailLink,trashed';
   async function metadata(fileId: string, target: DriveTarget): Promise<DriveItem> {
     if (!idPattern.test(fileId)) throw new StoreError(404, 'Photo not found.');
-    const query = new URLSearchParams({ fields: itemFields, supportsAllDrives: 'true' });
+    const query = new URLSearchParams({ fields: itemFields + ',appProperties', supportsAllDrives: 'true' });
     return await (await driveRequest(googleApi + '/' + fileId + '?' + query, target)).json() as DriveItem;
   }
 
   const isPhoto = (item: DriveItem) => !item.trashed && photoMime.has(item.mimeType);
   const view = (item: DriveItem) => ({ id: item.id, name: item.name, hasThumbnail: Boolean(item.thumbnailLink) });
 
-  async function children(target: DriveTarget, parent: string, filter: string, fields: string, pageSize: number, pageToken?: string) {
+  async function children(target: DriveTarget, parent: string | string[], filter: string, fields: string, pageSize: number, pageToken?: string) {
+    const parents = Array.isArray(parent) ? parent : [parent];
+    const membership = parents.map(id => "'" + id + "' in parents").join(' or ');
     const query = new URLSearchParams({
-      q: "'" + parent + "' in parents and trashed = false and (" + filter + ')',
+      q: (parents.length > 1 ? '(' + membership + ')' : membership) + ' and trashed = false and (' + filter + ')',
       fields: 'nextPageToken,incompleteSearch,files(' + fields + ')', orderBy: 'name_natural', pageSize: String(pageSize),
       supportsAllDrives: 'true', includeItemsFromAllDrives: 'true',
     });
@@ -168,16 +177,49 @@ export function createDriveReader(env: Readonly<Record<string, string | undefine
     return findFolderPhoto(target, folderId, photo.id, photo.name);
   }
 
-  async function favouritesFolder(target: DriveTarget) {
-    const filter = "mimeType = '" + folderMime + "' and name = 'Favourites'";
-    const result = await children(target, target.id, filter, 'id', 2);
-    if (result.files.length > 1 || result.nextPageToken) {
-      throw new StoreError(409, 'The studio must keep just one Favourites folder in this gallery.');
-    }
-    return result.files[0]?.id;
+  async function selectionFolders(target: DriveTarget) {
+    const filter = "mimeType = '" + folderMime + "' and (name = '" + selectionFolderName + "' or name = 'Favourites')";
+    const folders: DriveItem[] = [];
+    let token: string | undefined;
+    do {
+      const result = await children(target, target.id, filter, 'id,name', 100, token);
+      folders.push(...result.files);
+      token = result.nextPageToken;
+    } while (token);
+    return folders;
   }
 
-  async function photoIds(target: DriveTarget, parent: string) {
+  const provisioning = new Map<string, Promise<string>>();
+  async function ensureSelectionFolder(target: DriveTarget) {
+    const existing = provisioning.get(target.id);
+    if (existing) return existing;
+    const operation = (async () => {
+      const folders = await selectionFolders(target);
+      const chosen = folders.find(folder => folder.name === selectionFolderName);
+      if (chosen) return chosen.id;
+      const legacy = folders.find(folder => folder.name === 'Favourites');
+      const query = '?supportsAllDrives=true&fields=id';
+      if (legacy) {
+        await driveRequest(googleApi + '/' + legacy.id + query, target, 'PATCH', { name: selectionFolderName });
+        return legacy.id;
+      }
+      const response = await driveRequest(googleApi + query, target, 'POST', {
+        name: selectionFolderName, mimeType: folderMime, parents: [target.id],
+      });
+      return (await response.json() as Pick<DriveItem, 'id'>).id;
+    })();
+    provisioning.set(target.id, operation);
+    try { return await operation; } finally { provisioning.delete(target.id); }
+  }
+
+  async function selectedParent(target: DriveTarget, file: DriveItem, folders: DriveItem[]) {
+    for (const folder of folders) {
+      if (await photoInFolder(target, folder.id, file)) return folder;
+    }
+    return undefined;
+  }
+
+  async function photoIds(target: DriveTarget, parent: string | string[]) {
     const ids: string[] = [];
     let token: string | undefined;
     do {
@@ -195,31 +237,42 @@ export function createDriveReader(env: Readonly<Record<string, string | undefine
         const root = await metadata(target.id, target);
         if (root.mimeType !== folderMime || root.trashed) return !favourites && isPhoto(root) ? 1 : 0;
       }
-      const parent = favourites ? await favouritesFolder(target) : target.id;
-      return parent ? new Set(await photoIds(target, parent)).size : 0;
+      const parents = favourites ? (await selectionFolders(target)).map(folder => folder.id) : [target.id];
+      return parents.length ? new Set(await photoIds(target, parents)).size : 0;
     },
     async summary(link: string) {
       const target = driveTarget(link);
       const root = await metadata(target.id, target);
       if (root.mimeType !== folderMime || root.trashed) return { photos: isPhoto(root) ? [root.id] : [], selected: [] };
-      const [photos, favourites] = await Promise.all([photoIds(target, target.id), favouritesFolder(target)]);
-      return { photos, selected: favourites ? await photoIds(target, favourites) : [] };
+      const [photos, folders] = await Promise.all([photoIds(target, target.id), selectionFolders(target)]);
+      return { photos, selected: folders.length ? await photoIds(target, folders.map(folder => folder.id)) : [] };
     },
     async setFavourite(link: string, fileId: string, selected: boolean) {
       const target = driveTarget(link);
       if (target.kind === 'file' || fileId === target.id) throw new StoreError(422, 'Favourites require a Drive folder gallery.');
-      const [file, folder] = await Promise.all([metadata(fileId, target), favouritesFolder(target)]);
+      const [file, folders] = await Promise.all([metadata(fileId, target), selectionFolders(target)]);
       if (!isPhoto(file)) throw new StoreError(404, 'Photo not found in this gallery.');
       const inGallery = await photoInFolder(target, target.id, file);
-      const inFavourites = !inGallery && folder ? await photoInFolder(target, folder, file) : undefined;
+      const inFavourites = !inGallery ? await selectedParent(target, file, folders) : undefined;
       if (!inGallery && !inFavourites) throw new StoreError(404, 'Photo not found in this gallery.');
-      if (!folder) throw new StoreError(409, 'Ask the studio to create a Favourites folder inside this Drive gallery.');
-      if (selected ? inFavourites : inGallery) return;
+      if (!selected && inGallery) return;
+      const originalParent = inGallery ? target.id : file.appProperties?.[selectionSourceKey] ?? target.id;
+      // This gallery lists photos directly inside its root folder. Keep restores inside that same gallery.
+      if (!selected && originalParent !== target.id) {
+        throw new StoreError(409, 'The photo’s original folder is outside this linked gallery. Ask the studio to restore it in Drive.');
+      }
+      const destination = selected
+        ? folders.find(folder => folder.name === selectionFolderName)?.id ?? await ensureSelectionFolder(target)
+        : originalParent;
+      const previous = inFavourites?.id ?? target.id;
+      if (destination === previous) return;
       const query = new URLSearchParams({
-        addParents: selected ? folder : target.id, removeParents: selected ? target.id : folder,
+        addParents: destination, removeParents: previous,
         supportsAllDrives: 'true', fields: 'id',
       });
-      await driveRequest(googleApi + '/' + file.id + '?' + query, target, 'PATCH');
+      await driveRequest(googleApi + '/' + file.id + '?' + query, target, 'PATCH', {
+        appProperties: { [selectionSourceKey]: selected ? originalParent : null },
+      });
     },
     async list(link: string, pageToken?: string, favourites = false) {
       const target = driveTarget(link);
@@ -230,9 +283,9 @@ export function createDriveReader(env: Readonly<Record<string, string | undefine
           return { photos: !favourites && isPhoto(root) ? [view(root)] : [], nextPageToken: undefined };
         }
       }
-      const parent = favourites ? await favouritesFolder(target) : target.id;
-      if (!parent) return { photos: [], nextPageToken: undefined };
-      const result = await children(target, parent, photoFilter, itemFields, drivePhotoPageSize, pageToken);
+      const parents = favourites ? (await selectionFolders(target)).map(folder => folder.id) : [target.id];
+      if (!parents.length) return { photos: [], nextPageToken: undefined };
+      const result = await children(target, parents, photoFilter, itemFields, drivePhotoPageSize, pageToken);
       return { photos: result.files.filter(isPhoto).map(view), nextPageToken: result.nextPageToken };
     },
     async thumbnail(link: string, fileId: string, large = false, nameHint?: string) {
@@ -247,8 +300,8 @@ export function createDriveReader(env: Readonly<Record<string, string | undefine
         metadataThumbnail = metadataFile.thumbnailLink;
         file = target.id === fileId ? metadataFile : await photoInFolder(target, target.id, metadataFile);
         if (!file && target.kind !== 'file') {
-          const folder = await favouritesFolder(target);
-          if (folder) file = await photoInFolder(target, folder, metadataFile);
+          const folder = await selectedParent(target, metadataFile, await selectionFolders(target));
+          if (folder) file = await photoInFolder(target, folder.id, metadataFile);
         }
       }
       if (!file) {
